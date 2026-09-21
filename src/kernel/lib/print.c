@@ -87,7 +87,7 @@ void printf(const char *fmt, ...)
                     printptr(va_arg(ap , uint64));
                     break;
                 case 'c':
-                    uart_putc_sync(va_arg(ap , char));
+                    uart_putc_sync(va_arg(ap , int));
                     break;
                 case 's': {
                     char *str = va_arg(ap , char*);
