@@ -89,7 +89,7 @@ void printf(const char *fmt, ...)
                 case 'c':
                     uart_putc_sync(va_arg(ap , char));
                     break;
-                case 's':
+                case 's': {
                     char *str = va_arg(ap , char*);
                     int l = 0;
                     while (str[l] != '\0'){
@@ -97,6 +97,7 @@ void printf(const char *fmt, ...)
                         l++;
                     }
                     break;
+                }
 
                 default:
                     break;
