@@ -1,5 +1,5 @@
 /* 标准输出和报错机制 */
-
+#include <stdarg.h>
 #include "mod.h"
 
 static char digits[] = "0123456789abcdef";
@@ -59,7 +59,52 @@ static void printptr(uint64 x)
 */
 void printf(const char *fmt, ...)
 {
+    va_list ap;
+    va_start(ap , fmt);
 
+    int len = 0;
+    while (fmt[len] != '\0') {
+        if (fmt[len] != '%' || (
+                fmt[len] == '%' && (
+                    fmt[len+1] == '\0' || (
+                        fmt[len+1] != 'd' && fmt[len+1] != 'p' && fmt[len+1] != 'x' && fmt[len+1] != 'c' && fmt[len+1] != 's'
+                    )
+                )
+            )
+        )
+            uart_putc_sync(fmt[len]);
+        else {
+            len++;
+            switch (fmt[len])
+            {
+                case 'd':
+                    printint(va_arg(ap , int32) , 10 , 1);
+                    break;
+                case 'p':
+                    printint(va_arg(ap , uint32) , 16 , 0);
+                    break;
+                case 'x':
+                    printptr(va_arg(ap , uint64));
+                    break;
+                case 'c':
+                    uart_putc_sync(va_arg(ap , char));
+                    break;
+                case 's':
+                    char *str = va_arg(ap , char*);
+                    int l = 0;
+                    while (str[l] != '\0'){
+                        uart_putc_sync(str[l]);
+                        l++;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        len++;
+    }
 }
 
 
