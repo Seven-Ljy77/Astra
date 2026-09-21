@@ -64,16 +64,20 @@ void printf(const char *fmt, ...)
 
     int len = 0;
     while (fmt[len] != '\0') {
-        if (fmt[len] != '%' || (
+        if (fmt[len+1] == '\0') // 结尾
+            uart_putc_sync(fmt[len]);
+        else if (fmt[len] == '%' && fmt[len+1] == '%'){ // 双 %
+            uart_putc_sync('%');
+            len ++;
+        }
+        else if (fmt[len] != '%' || ( // 非 % 字符或 % 后接非规范字符
                 fmt[len] == '%' && (
-                    fmt[len+1] == '\0' || (
-                        fmt[len+1] != 'd' && fmt[len+1] != 'p' && fmt[len+1] != 'x' && fmt[len+1] != 'c' && fmt[len+1] != 's'
-                    )
+                    fmt[len+1] != 'd' && fmt[len+1] != 'p' && fmt[len+1] != 'x' && fmt[len+1] != 'c' && fmt[len+1] != 's'
                 )
             )
         )
             uart_putc_sync(fmt[len]);
-        else {
+        else { // % 字符处理
             len++;
             switch (fmt[len])
             {

@@ -5,7 +5,7 @@ int main()
 {
     print_init();
 
-    printf("CPU %d is booting !" , r_tp());
+    printf("CPU %d is booting !\n" , r_tp());
 
     while (1){}
 
