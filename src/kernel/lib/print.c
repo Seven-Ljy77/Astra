@@ -106,6 +106,8 @@ void printf(const char *fmt, ...)
 
         len++;
     }
+
+    va_end(ap);
 }
 
 
