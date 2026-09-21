@@ -3,11 +3,11 @@ ENTRY( _entry )
 
 SECTIONS
 {
-  . = 0x80000000;
+  . = 0x80000000;         /* 整个操作系统内存的起始位置 */
 
   .text : {
-    *(.text .text.*)
-    . = ALIGN(0x1000);
+    *(.text .text.*)      /* 将所有 .o 文件内的 text 段内容归入 .elf 中的 .text 段 */
+    . = ALIGN(0x1000);    /* 定义最后的字节对齐至 0x1000 的倍数，即 4096 字节的倍数，即 4KB */
     /*
     _trampoline = .;
     *(trampsec)
