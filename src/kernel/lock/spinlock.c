@@ -49,6 +49,8 @@ bool spinlock_holding(spinlock_t *lk)
 // 获取自选锁
 void spinlock_acquire(spinlock_t *lk)
 {
+    push_off();
+
     if (spinlock_holding(lk)) // 已经持有自旋锁
         return;
 
@@ -66,4 +68,6 @@ void spinlock_release(spinlock_t *lk)
     __sync_lock_test_and_set(&(lk->locked) , 0);  // 如果旧值为 1 说明原本上锁成功解锁
 
     lk->cpuid = 0;
+
+    pop_off();
 }
