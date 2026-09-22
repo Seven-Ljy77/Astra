@@ -59,6 +59,8 @@ static void printptr(uint64 x)
 */
 void printf(const char *fmt, ...)
 {
+    spinlock_acquire(&print_lk);
+
     va_list ap;
     va_start(ap , fmt);
 
@@ -112,6 +114,8 @@ void printf(const char *fmt, ...)
     }
 
     va_end(ap);
+
+    spinlock_release(&print_lk);
 }
 
 
