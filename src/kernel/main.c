@@ -9,10 +9,13 @@ int main()
         print_init();
         printf("\n");
         printf("kernel is booting !\n\n");
+        __sync_synchronize();
         started = 1;
     }
 
     while (started == 0) {}
+
+    __sync_synchronize();
 
     printf("CPU %d is booting !\n" , r_tp());
 

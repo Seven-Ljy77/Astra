@@ -51,10 +51,14 @@ void spinlock_acquire(spinlock_t *lk)
 {
     push_off();
 
-    if (spinlock_holding(lk)) // 已经持有自旋锁
+    if (spinlock_holding(lk)){ // 已经持有自旋锁
+        pop_off();
         return;
+    }
 
     while (__sync_lock_test_and_set(&(lk->locked) , 1) != 0) {} // 这个函数只会强行写入1 , 然后返回旧值 , 如果旧值为 0 说明原本锁空成功上锁
+
+    __sync_synchronize();
 
     lk->cpuid = r_tp();
 }
@@ -65,9 +69,11 @@ void spinlock_release(spinlock_t *lk)
     if (!spinlock_holding(lk)) // 未持有自旋锁
         return ;
 
-    __sync_lock_test_and_set(&(lk->locked) , 0);  // 如果旧值为 1 说明原本上锁成功解锁
-
     lk->cpuid = 0;
+
+    __sync_synchronize();
+
+    __sync_lock_test_and_set(&(lk->locked) , 0);  // 如果旧值为 1 说明原本上锁成功解锁
 
     pop_off();
 }
