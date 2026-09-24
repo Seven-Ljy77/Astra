@@ -2,7 +2,9 @@
 
 ## 成果
 
-xv6 操作系统启动成功，图片见 [result.png](result.png)
+xv6 操作系统启动成功，图片见 [lab0.png](lab0.png)
+
+<img src="lab0.png">
 
 ## 遇到的问题
 
