@@ -4,6 +4,8 @@
 
 xv6 操作系统启动成功，图片见 [lab0.png](lab0.png)
 
+<img src="lab0.png">
+
 ## 遇到的问题
 
 - 我使用的是 Windows 上的 WSL，我一开始安装的 ubuntu 版本是比 22.04 LTS 更高版本的 ubuntu ，然后在编译操作系统时总会在最后一步卡住无法出现 xv6 的 shell 
