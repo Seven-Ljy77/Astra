@@ -3,13 +3,13 @@
 
 volatile static int started = 0;
 
-volatile static uint64 main_hart = -1;
+volatile static int main_hart = -1;
 
-extern void _entry();
+extern void _entry(void);
 
 int main()
 {
-    uint64 cpuid = r_tp();
+    int cpuid = r_tp();
 
     if (main_hart == -1)
         main_hart = cpuid;
@@ -24,12 +24,12 @@ int main()
         __sync_synchronize();
         started = 1;
 
-        for (uint64 i=0 ; i<(uint64)NCPU ; i++) {
+        for (int i=0 ; i<(int)NCPU ; i++) {
             if (i == cpuid)
                 continue;
 
-            sbi_ret_t result = sbi_hart_start(i , (uint64)_entry , 0);
-            if (result.error != SBI_SUCCESS) {
+            sbi_ret_t result = sbi_hart_start((uint64)i , (uint64)_entry , (uint64)0);
+            if (result.error != (int64)SBI_SUCCESS) {
                 printf("Hart %d Starting Failed" , i);
                 return 0;
             }
