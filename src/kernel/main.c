@@ -19,6 +19,7 @@ int main()
 
         printf("\n");
         printf("kernel is booting !\n");
+        printf("main_hart is %d\n" , cpuid);
         printf("\n");
 
         __sync_synchronize();
@@ -30,7 +31,7 @@ int main()
 
             sbi_ret_t result = sbi_hart_start((uint64)i , (uint64)_entry , (uint64)0);
             if (result.error != (int64)SBI_SUCCESS) {
-                printf("Hart %d Starting Failed" , i);
+                printf("Hart %d Starting Failed , result.error = %d" , i , (int)(result.error));
                 return 0;
             }
         }
