@@ -3,23 +3,11 @@
 
 volatile static int started = 0;
 
+extern void _entry();
+
 int main()
 {
-    /*if (r_tp() == 0){ // init
-        print_init();
-        printf("\n");
-        printf("kernel is booting !\n\n");
-        __sync_synchronize();
-        started = 1;
-    }
-
-    while (started == 0) {}
-
-    __sync_synchronize();
-
-    printf("CPU %d is booting !\n" , r_tp());*/
-
-    int cpuid = r_tp();
+    uint64 cpuid = r_tp();
 
     if (cpuid == 0) {
         print_init();
@@ -30,6 +18,17 @@ int main()
 
         __sync_synchronize();
         started = 1;
+
+        for (uint64 i=0 ; i<(uint64)NCPU ; i++) {
+            if (i == cpuid)
+                continue;
+
+            sbi_ret_t result = sbi_hart_start(i , (uint64)_entry , 0);
+            if (result.error != SBI_SUCCESS) {
+                printf("Hart %d Starting Failed" , i);
+                return 0;
+            }
+        }
     }
 
     while (started == 0) {}
