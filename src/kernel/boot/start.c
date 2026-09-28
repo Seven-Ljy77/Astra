@@ -5,7 +5,10 @@ __attribute__((aligned(16))) uint8 CPU_stack[4096 * NCPU];
 
 extern void main();
 
-void start()
+// entry.S 中负责参数传入，a0 a1 寄存器作为参数，这里只写一个参数表示只接受 a0 寄存器的参数
+// a0 寄存器为 64 位寄存器，因此使用 uint64
+// openSBI 固件会将 cpuid 写入 a1 寄存器，再由 entry.S 将 a0 作为参数传入 start 函数
+void start(uint64 hartid)
 {
     // 暂时不开启分页，使用物理地址
     w_satp(0);
