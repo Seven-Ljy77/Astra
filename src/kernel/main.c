@@ -19,11 +19,12 @@ int main()
 
         printf("\n");
         printf("kernel is booting !\n");
-        printf("main_hart is %d\n" , cpuid);
         printf("\n");
 
         __sync_synchronize();
         started = 1;
+
+        printf("CPU %d is booting !\n" , cpuid);
 
         for (int i=0 ; i<(int)NCPU ; i++) {
             if (i == cpuid)
@@ -36,10 +37,10 @@ int main()
             }
         }
     }
-
-    while (started == 0) {}
-
-    printf("CPU %d is booting !\n" , cpuid);
+    else {
+        while (started == 0) {}
+        printf("CPU %d is booting !\n" , cpuid);   
+    }
 
     while (1) {}
 
