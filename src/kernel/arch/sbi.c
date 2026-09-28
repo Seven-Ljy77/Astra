@@ -22,7 +22,7 @@ sbi_ret_t sbi_ecall(uint64 eid, uint64 fid,
   return (sbi_ret_t){(int64)a0, (int64)a1};
 }
 
-sbi_ret_t sbi_hart_start(uint64 hartid, uint64 start_addr, uint64 opaque)
+sbi_ret_t sbi_hart_start(uint64 hartid, uint64 start_addr, uint64 opaque) // 用于在已启动第一个内核的情况下，再启动一个内核
 {
   return sbi_ecall(SBI_EXT_HSM, SBI_HSM_HART_START,
                    hartid, start_addr, opaque, 0, 0, 0);
