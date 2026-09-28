@@ -11,10 +11,11 @@ int main()
 {
     int cpuid = r_tp();
 
-    if (main_hart == -1)
-        main_hart = cpuid;
+    // 检查旧值如果符合 -1 则交换为 cpuid (原子操作)
+    // 返回是否交换成功
+    bool if_main_hart = __sync_bool_compare_and_swap(&main_hart, -1, cpuid);
 
-    if (cpuid == main_hart) {
+    if (if_main_hart) {
         print_init();
 
         printf("\n");
@@ -39,6 +40,8 @@ int main()
     }
     else {
         while (started == 0) {}
+        __sync_synchronize();
+        
         printf("CPU %d is booting !\n" , cpuid);   
     }
 
