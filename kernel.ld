@@ -10,7 +10,7 @@ PHDRS
 SECTIONS
 {
   /* OpenSBI occupies the machine-mode firmware area from 0x80000000. */
-  . = 0x80200000;
+  . = 0x80200000;    /* 0x80000000 开始的一段是 OpenSBI 的固件的物理地址，为了防止重叠把操作系统的内存开始地址推后 */
 
   .text : {
     KEEP(*(.text.entry))
@@ -23,7 +23,7 @@ SECTIONS
     ASSERT(. - _trampoline == 0x1000, "error: trampoline larger than one page");
     */
     PROVIDE(KERNEL_DATA = .);
-  } :text
+  } :text    /* 表示将上述内容归为 PHDRS 的 text 段，给对应权限 */
 
   .rodata : {
     . = ALIGN(16);
