@@ -31,7 +31,7 @@ typedef enum
 
 /* OS 全局变量 */
 
-#define NCPU 5 // 最大CPU数量
+#define NCPU 2 // 最大CPU数量
 
 /* SBI Hart State Management extension */
 #define SBI_SUCCESS 0
