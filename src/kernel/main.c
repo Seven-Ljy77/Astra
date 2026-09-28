@@ -3,13 +3,18 @@
 
 volatile static int started = 0;
 
+volatile static uint64 main_hart = -1;
+
 extern void _entry();
 
 int main()
 {
     uint64 cpuid = r_tp();
 
-    if (cpuid == 0) {
+    if (main_hart == -1)
+        main_hart = cpuid;
+
+    if (cpuid == main_hart) {
         print_init();
 
         printf("\n");
