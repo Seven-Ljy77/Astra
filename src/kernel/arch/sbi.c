@@ -22,7 +22,11 @@ sbi_ret_t sbi_ecall(uint64 eid, uint64 fid,
   return (sbi_ret_t){(int64)a0, (int64)a1};
 }
 
-sbi_ret_t sbi_hart_start(uint64 hartid, uint64 start_addr, uint64 opaque) // 用于在已启动第一个内核的情况下，再启动一个内核
+// 用于在已启动第一个内核的情况下，再启动一个内核
+// 这里的第二个参数 start_addr 是 启动代码 的地址，即启动 hart 的一段汇编的第一行命令的地址
+// 也就是 _entry 标签指示的位置
+// 第三个参数这个 lab2 好像用不到
+sbi_ret_t sbi_hart_start(uint64 hartid, uint64 start_addr, uint64 opaque)
 {
   return sbi_ecall(SBI_EXT_HSM, SBI_HSM_HART_START,
                    hartid, start_addr, opaque, 0, 0, 0);
