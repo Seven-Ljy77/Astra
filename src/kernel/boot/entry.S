@@ -13,7 +13,8 @@ _entry:
         mul t1, t1, t2
         add sp, t0, t1
         # 跳转到start
-        call start
+        call start      # RISC-V 架构规定，函数调用时的第一个参数为 a0 寄存器，第二个参数为 a1 寄存器
+                        # 这里只传了 a0 参数
 spin:
         wfi
         j spin
