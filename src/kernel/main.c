@@ -19,15 +19,22 @@ int main()
 
     printf("CPU %d is booting !\n" , r_tp());*/
 
-    print_init();
-    
-    printf("\n");
-    printf("kernel is booting !\n");
-    printf("\n");
+    int cpuid = r_tp();
 
-    __sync_synchronize();
+    if (cpuid == 0) {
+        print_init();
 
-    printf("CPU %d is booting !\n" , r_tp());
+        printf("\n");
+        printf("kernel is booting !\n");
+        printf("\n");
+
+        __sync_synchronize();
+        started = 1;
+    }
+
+    while (started == 0) {}
+
+    printf("CPU %d is booting !\n" , cpuid);
 
     while (1) {}
 
