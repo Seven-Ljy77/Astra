@@ -1,5 +1,6 @@
 #include "arch/mod.h"
 #include "lib/mod.h"
+#include "mem/mod.h"
 
 volatile static int started = 0;
 
@@ -17,6 +18,7 @@ int main()
 
     if (if_main_hart) {
         print_init();
+        pmem_init();
 
         printf("\n");
         printf("kernel is booting !\n");
