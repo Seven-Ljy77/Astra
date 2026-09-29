@@ -9,6 +9,48 @@ static pgtbl_t kernel_pgtbl;
 // 提示：使用 VA_TO_VPN + PTE_TO_PA + PA_TO_PTE
 pte_t *vm_getpte(pgtbl_t pgtbl, uint64 va, bool alloc)
 {
+    // 每一级页表的查询索引为虚拟地址 va 的对应 9 位 bit
+    // 用 VA_TO_VPN(va , ) 来获取 va 中对应级别的索引
+    // 通过索引查对应页表可以获得对应 PTE 页表项
+    // PTE 的值的中间一段 bit 是下一级页表的首位页表项的物理地址
+    // 通过 PTE_TO_PA(PTE) 获取下一级页表的首位物理地址
+    // 然后再进行下一级查询
+
+    // PTE 值的 V bit 标记是否有有效的下一级页表项
+    // 如果下一级页表内存未分配且在 alloc == true 的情况下可以直接分配内存
+    // 分配完内存后要更新父 PTE 的值，通过 PA_TO_PTE 函数计算出 PTE 内存的值
+
+    pte_t *pte_2 = pgtbl + VA_TO_VPN(va , 2);                         // 查询出顶级页表的 PTE
+
+    if (((*pte_2) & PTE_V) == 0) {   // 下级页表内存未分配
+        if (!alloc)
+            return NULL;
+        *pte_2 = PA_TO_PTE(pmem_alloc(true)) | PTE_V;
+    }
+    else if (!PTE_CHECK((uint64)pte_2)){
+        return NULL;
+    }
+
+    pte_t *pte_1 = (pgtbl_t)PTE_TO_PA(*pte_2) + VA_TO_VPN(va , 1);     // 查询出次级页表的 PTE
+
+    if ((*pte_1 & PTE_V) == 0) {
+        if (!alloc)
+            return NULL;
+        *pte_1 = PA_TO_PTE(pmem_alloc(true)) | PTE_V;
+    }
+    else if (!PTE_CHECK((uint64)pte_2)){
+        return NULL;
+    }
+
+    pte_t *pte_0 = (pgtbl_t)PTE_TO_PA(*pte_1) + VA_TO_VPN(va , 0);     // 查询出低级页表的 PTE
+
+    if ((*pte_0 & PTE_V) == 0) {
+        if (!alloc)
+            return NULL;
+        *pte_0 |= PTE_V;
+    }
+
+    return pte_0;
 }
 
 // 在pgtbl中建立 [va, va + len) -> [pa, pa + len) 的映射
