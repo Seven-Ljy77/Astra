@@ -17,6 +17,11 @@ void print_init(void)
 /* %d %p */
 static void printint(int xx, int base, int sign)
 {
+    if (sign == 0) {
+        uart_putc_sync('0');
+        uart_putc_sync('x');
+    }
+
     char buf[16];
     int i;
     uint32 x;
