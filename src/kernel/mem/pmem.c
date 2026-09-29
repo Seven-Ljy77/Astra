@@ -36,9 +36,26 @@ void pmem_init(void)
 
 // 尝试返回一个可分配的清零后的物理页
 // 失败则panic锁死
-void *pmem_alloc(bool in_kernel)
+void *pmem_alloc(bool in_kernel) // true : 从 kern_region 分配      false : 从 user_region 分配
 {
-    page_node_t *page;
+    alloc_region_t *region = in_kernel ? &kern_region : &user_region;
+
+    spinlock_acquire(&region->lk);  // 必须放在读取 *page 前，否则多个核会同时拿到同一个 page 地址
+
+    page_node_t *page = region->list_head.next;
+
+    if (page == NULL) {
+        spinlock_release(&region->lk);
+        assert(false , (char *)((in_kernel) ? "Kernel Memory Exhausted" : "User Memory Exhausted"));
+        return NULL;
+    }
+    
+    region->list_head.next = page->next;
+    region->allocable --;
+
+    spinlock_release(&region->lk);
+
+    memset((void *)page , (uint8)0 , (uint32)PGSIZE);
 
     return page;
 }
