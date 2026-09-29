@@ -64,4 +64,47 @@ void *pmem_alloc(bool in_kernel) // true : 从 kern_region 分配      false : �
 // 失败则panic锁死
 void pmem_free(uint64 page, bool in_kernel)
 {
+    alloc_region_t *region = in_kernel ? &kern_region : &user_region;
+
+    spinlock_acquire(&region->lk);
+
+    page_node_t *ptr = region->list_head.next; // 起始页节点
+
+    if (page < region->begin || page > region->end - PGSIZE || (page - region->begin) % (uint64)PGSIZE != 0 || (page_node_t *)page == ptr) { // 非法 page
+        spinlock_release(&region->lk);
+        assert(false , (char *)"Invalid Page Address");
+        return;
+    }
+    
+    if (ptr == NULL) { // 空闲链表初始为空
+        region->list_head.next = (page_node_t *)page;
+        region->list_head.next->next = NULL;
+    }
+    else if (page < (uint64)ptr) { // 作为头节点插入
+        region->list_head.next = (page_node_t *)page;
+        region->list_head.next->next = ptr;
+    }
+    else {
+        while (ptr->next != NULL && (uint64)ptr->next <= page)
+            ptr = ptr->next;
+
+        if ((page_node_t *)page == ptr) {   // 链表中已有这个页，重复 release
+            spinlock_release(&region->lk);
+            assert(false , (char *)"Invalid Page Address");
+            return;
+        }
+
+        if (ptr->next == NULL) { // 作为尾节点插入
+            ptr->next = (page_node_t *)page;
+            ptr->next->next = NULL;
+        }
+        else {
+            page_node_t *ptr_tmp = ptr->next;
+            ptr->next = (page_node_t *)page;
+            ptr->next->next = ptr_tmp;
+        }
+    }
+
+    region->allocable ++;
+    spinlock_release(&region->lk);
 }
