@@ -27,7 +27,7 @@ pte_t *vm_getpte(pgtbl_t pgtbl, uint64 va, bool alloc)
             return NULL;
         *pte_2 = PA_TO_PTE(pmem_alloc(true)) | PTE_V;
     }
-    else if (!PTE_CHECK((uint64)pte_2)){
+    else if (!PTE_CHECK((uint64)*pte_2)){
         return NULL;
     }
 
@@ -38,17 +38,11 @@ pte_t *vm_getpte(pgtbl_t pgtbl, uint64 va, bool alloc)
             return NULL;
         *pte_1 = PA_TO_PTE(pmem_alloc(true)) | PTE_V;
     }
-    else if (!PTE_CHECK((uint64)pte_2)){
+    else if (!PTE_CHECK((uint64)*pte_1)){
         return NULL;
     }
 
     pte_t *pte_0 = (pgtbl_t)PTE_TO_PA(*pte_1) + VA_TO_VPN(va , 0);     // 查询出低级页表的 PTE
-
-    if ((*pte_0 & PTE_V) == 0) {
-        if (!alloc)
-            return NULL;
-        *pte_0 |= PTE_V;
-    }
 
     return pte_0;
 }
@@ -59,6 +53,25 @@ pte_t *vm_getpte(pgtbl_t pgtbl, uint64 va, bool alloc)
 // 注意: perm 应该如何使用
 void vm_mappages(pgtbl_t pgtbl, uint64 va, uint64 pa, uint64 len, int perm)
 {
+    // 本质就是将虚拟地址 va 对应的末级 PTE 的值设为 PA_TO_PTE(pa) 然后再根据 perm 修改 XRW 权限
+    // v bit 的值显示设置为 1
+
+    assert(((va - (uint64)ALLOC_BEGIN) % (uint64)PGSIZE == 0) , "Invalid VA");
+    assert(((pa - (uint64)ALLOC_BEGIN) % (uint64)PGSIZE == 0) , "Invalid PA");
+    assert((len > 0 && va <= VA_MAX && len <= VA_MAX && (va + len <= VA_MAX && va + len > va && va + len > len)) , "Invalid len");
+
+    for (uint64 i = va ; i <= (uint64)((va + len - 1) - (va + len - 1) % (uint64)PGSIZE) ; i+=(uint64)PGSIZE) {
+        pte_t *pte = vm_getpte(pgtbl , i , true);
+
+        assert((pte != NULL) , "Getpte Failed");
+
+        *pte = PA_TO_PTE(pa + i - va);
+
+        (*pte) = ((*pte) & (~PTE_R)) | (perm & PTE_R);
+        (*pte) = ((*pte) & (~PTE_W)) | (perm & PTE_W);
+        (*pte) = ((*pte) & (~PTE_X)) | (perm & PTE_X);
+        (*pte) = ((*pte) & (~PTE_V)) | (1 & PTE_V);
+    }
 }
 
 // 解除pgtbl中[va, va+len)区域的映射
