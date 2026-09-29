@@ -44,7 +44,7 @@ int main()
         while (started == 0) {}
         __sync_synchronize();
         
-        printf("CPU %d is booting !\n" , cpuid);   
+        printf("CPU %d is booting !\n" , cpuid);
     }
 
     while (1) {}
