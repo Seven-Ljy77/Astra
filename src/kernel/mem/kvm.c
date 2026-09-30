@@ -59,7 +59,7 @@ void vm_mappages(pgtbl_t pgtbl, uint64 va, uint64 pa, uint64 len, int perm)
 
     assert(((va - (uint64)ALLOC_BEGIN) % (uint64)PGSIZE == 0) , "Invalid VA");
     assert(((pa - (uint64)ALLOC_BEGIN) % (uint64)PGSIZE == 0) , "Invalid PA");
-    assert((len > 0 && va <= VA_MAX && len <= VA_MAX && (va + len <= VA_MAX && va + len > va && va + len > len)) , "Invalid len");
+    assert((len > 0 && va <= VA_MAX && len <= VA_MAX && (va + len <= VA_MAX && va + len >= va && va + len >= len)) , "Invalid len");
 
     for (uint64 i = va ; i <= (uint64)((va + len - 1) - (va + len - 1) % (uint64)PGSIZE) ; i+=(uint64)PGSIZE) {
         pte_t *pte = vm_getpte(pgtbl , i , true);
