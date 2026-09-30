@@ -104,6 +104,21 @@ void vm_unmappages(pgtbl_t pgtbl, uint64 va, uint64 len, bool freeit)
 // 相当于部分填充kernel_pgtbl
 void kvm_init()
 {
+    // 要映射的区域：
+    // UART : 0x10000000ul(UART_BASE) ~ (UART_BASE + PGSIZE)
+    // PLIC : 0x0c000000ul(PLIC_BASE) ~ 0x0c000000ul + 0x04000000ul(PLIC_BASE + PLIC_SIZE)
+    // 内核代码 : KERNEL_BASE ~ KERNEL_DATA
+    // 内核数据 : KERNEL_DATA ~ ALLOC_BEGIN
+    // 可分配区域 : ALLOC_BEGIN ~ ALLOC_END
+
+    // 以上全部使用 VA == PA 的对等映射
+
+    kernel_pgtbl = pmem_alloc(true);
+
+    vm_mappages(kernel_pgtbl , (uint64)UART_BASE , (uint64)UART_BASE , (uint64)PGSIZE , PTE_R | PTE_W);
+    vm_mappages(kernel_pgtbl , (uint64)PLIC_BASE , (uint64)PLIC_BASE , (uint64)PLIC_SIZE , PTE_R | PTE_W);
+    vm_mappages(kernel_pgtbl , (uint64)KERNEL_BASE , (uint64)KERNEL_BASE , (uint64)KERNEL_DATA - (uint64)KERNEL_BASE , PTE_R | PTE_X);
+    vm_mappages(kernel_pgtbl , (uint64)KERNEL_DATA , (uint64)KERNEL_DATA , (uint64)ALLOC_END - (uint64)KERNEL_DATA , PTE_R | PTE_W);
 }
 
 // 每个CPU都需要调用, 从不使用页表切换到使用内核页表
