@@ -19,6 +19,8 @@ int main()
     if (if_main_hart) {
         print_init();
         pmem_init();
+        kvm_init();
+        kvm_inithart();
 
         printf("\n");
         printf("kernel is booting !\n");
@@ -43,6 +45,8 @@ int main()
     else {
         while (started == 0) {}
         __sync_synchronize();
+        
+        kvm_inithart();
         
         printf("CPU %d is booting !\n" , cpuid);
     }
