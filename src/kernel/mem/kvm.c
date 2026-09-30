@@ -79,6 +79,24 @@ void vm_mappages(pgtbl_t pgtbl, uint64 va, uint64 pa, uint64 len, int perm)
 // 如果freeit == true则释放对应物理页, 默认是用户的物理页
 void vm_unmappages(pgtbl_t pgtbl, uint64 va, uint64 len, bool freeit)
 {
+    assert(((va - (uint64)ALLOC_BEGIN) % (uint64)PGSIZE == 0) , "Invalid VA");
+    assert((len > 0 && va <= VA_MAX && len <= VA_MAX && (va + len <= VA_MAX && va + len > va && va + len > len)) , "Invalid len");
+    
+    for (uint64 i = va ; i <= (uint64)((va + len - 1) - (va + len - 1) % (uint64)PGSIZE) ; i+=(uint64)PGSIZE) {
+        pte_t *pte = vm_getpte(pgtbl , i , false);
+
+        assert(pte != NULL , "Getpte Failed");
+
+        if ((((uint64)*pte) & PTE_V) == 0) { // 本来就无效，不用释放
+            *pte = 0;
+            continue;
+        }
+
+        if (freeit)
+            pmem_free((uint64)PTE_TO_PA((uint64)*pte) , false); // 因为默认用户物理页所以是 false
+
+        *pte = 0;
+    }
 }
 
 // 完成UART、PLIC、内核代码区、内核数据区、可分配区域的页表映射
