@@ -43,6 +43,7 @@ pte_t *vm_getpte(pgtbl_t pgtbl, uint64 va, bool alloc)
     }
 
     pte_t *pte_0 = (pgtbl_t)PTE_TO_PA(*pte_1) + VA_TO_VPN(va , 0);     // 查询出低级页表的 PTE
+    // 最低级页表的查询结果 PTE 不用设置 V bit
 
     return pte_0;
 }
