@@ -37,11 +37,6 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 	then echo "-gdb tcp::$(GDBPORT)"; \
 	else echo "-s -p $(GDBPORT)"; fi)
 
-.PHONY: aaa
-aaa:
-	$(MAKE) clean
-	$(MAKE) run
-
 # 生成GDB初始化文件
 .gdbinit: .gdbinit.tmpl-riscv
 	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
