@@ -2,9 +2,9 @@
 #include "lib/mod.h"
 #include "mem/mod.h"
 
-volatile static int started = 0;
+static volatile int started = 0;
 
-volatile static int main_hart = -1;
+static volatile int main_hart = -1;
 
 extern void _entry(void);
 
@@ -23,6 +23,7 @@ int main()
         kvm_inithart();
         trap_kernel_init();
         trap_kernel_inithart();
+        timer_init();
 
         printf("\n");
         printf("kernel is booting !\n");
@@ -50,6 +51,7 @@ int main()
         
         kvm_inithart();
         trap_kernel_inithart();
+        timer_init();
         
         printf("CPU %d is booting !\n" , cpuid);
     }

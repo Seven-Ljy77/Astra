@@ -21,15 +21,25 @@ void timer_init(void)
 // 系统时钟的创建, 只需要做一次(位于trap_kernel_init中)
 void timer_create(void)
 {
+    system_timer.ticks = 0;
+    spinlock_init(&system_timer.lk , "system_timer");
 }
 
 // 时钟滴答: 更新共享的滴答计数
 // 多核情况下只允许CPU-0调用, 否则ticks会涨得比时钟还快
 void timer_update(void)
 {
+    spinlock_acquire(&system_timer.lk);
+    system_timer.ticks ++;
+    spinlock_release(&system_timer.lk);
 }
 
 // 获取当前的滴答数
 uint64 timer_get_ticks(void)
 {
+    spinlock_acquire(&system_timer.lk);
+    uint64 ticks = (uint64)(system_timer.ticks);
+    spinlock_release(&system_timer.lk);
+    
+    return ticks;
 }

@@ -95,6 +95,10 @@ void trap_kernel_handler()
                 external_interrupt_handler();
                 break;
 
+            case 5:
+                timer_interrupt_handler();
+                break;
+
             default: // 例外处理
                 printf("\nunexpected interrupt: %s\n", interrupt_info[trap_id]);
                 printf("trap_id = %d, sepc = %p, stval = %p\n", trap_id, sepc, stval);
@@ -119,7 +123,7 @@ void trap_kernel_handler()
 void external_interrupt_handler()
 {
     int irq = plic_claim();
-    
+
     switch (irq)
     {
         case UART_IRQ:
@@ -137,8 +141,11 @@ void external_interrupt_handler()
 // 时钟中断处理 (当前内核的时钟源由OpenSBI设置)
 void timer_interrupt_handler()
 {
+    // 触发时钟中断后，由 CPU 0 来让全局共享的时钟的 ticks 加 1
+
     // 设置下一次时钟事件
     // 如果不设置, stimecmp会一直是一个过期的值, CPU处理完这次中断后会立刻再次响应同一个中断
+    sbi_set_timer(r_time() + INTERVAL); // r_time() 可以读取当前硬件计数值 , interval 是设置的一个时钟中断触发的固定间隔
 
     // 只由CPU-0更新共享时钟。
     if (mycpuid() == 0)
