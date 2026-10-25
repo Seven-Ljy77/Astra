@@ -18,3 +18,5 @@ git checkout lab1
 `lab1` 实验报告：[docs/lab1/README.md](docs/lab1/README.md)
 
 `lab2` 实验报告：[docs/lab2/README.md](docs/lab2/README.md)
+
+`lab3` 实验报告：[docs/lab3/README.md](docs/lab3/README.md)
