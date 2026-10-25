@@ -73,6 +73,7 @@ void trap_kernel_inithart()
 // 内核态trap处理的核心逻辑
 void trap_kernel_handler()
 {
+    // 进入陷阱时，CPU 会自动填入这四个寄存器
     uint64 sepc = r_sepc();       // 记录了发生异常时的PC值
     uint64 sstatus = r_sstatus(); // 与特权模式和中断相关的状态信息
     uint64 scause = r_scause();   // 引发trap的原因
@@ -90,11 +91,14 @@ void trap_kernel_handler()
         // 1-中断处理
         switch (trap_id) // 中断产生原因分类
         {
+            case 9:
+                external_interrupt_handler();
+                break;
 
-        default: // 例外处理
-            printf("\nunexpected interrupt: %s\n", interrupt_info[trap_id]);
-            printf("trap_id = %d, sepc = %p, stval = %p\n", trap_id, sepc, stval);
-            panic("trap_kernel_handler");
+            default: // 例外处理
+                printf("\nunexpected interrupt: %s\n", interrupt_info[trap_id]);
+                printf("trap_id = %d, sepc = %p, stval = %p\n", trap_id, sepc, stval);
+                panic("trap_kernel_handler");
         }
     }
     else
@@ -114,6 +118,20 @@ void trap_kernel_handler()
 // 外设中断处理 (基于PLIC，lab-3只需要识别和处理UART中断)
 void external_interrupt_handler()
 {
+    int irq = plic_claim();
+    
+    switch (irq)
+    {
+        case UART_IRQ:
+            uart_intr();
+            break;
+        
+        default:
+            break;
+    }
+    
+    if (irq != 0)
+        plic_complete(irq);
 }
 
 // 时钟中断处理 (当前内核的时钟源由OpenSBI设置)

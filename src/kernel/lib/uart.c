@@ -68,7 +68,6 @@ void uart_intr(void)
 		if (c == -1)
 		    break;
         
-        
         if (c == 10 || c == 13) { // \n \r
             uart_putc_sync('\r');
             uart_putc_sync('\n');
