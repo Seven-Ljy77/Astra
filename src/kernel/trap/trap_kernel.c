@@ -63,6 +63,8 @@ void trap_kernel_inithart()
     // 填写内核态中断处理函数
     w_stvec((uint64)kernel_vector);
 
+    w_sie(r_sie() | SIE_SEIE);
+
     // 打开中断
     intr_on();
 }
