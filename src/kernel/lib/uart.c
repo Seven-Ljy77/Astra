@@ -66,7 +66,19 @@ void uart_intr(void)
 	{
 		int c = uart_getc_sync();
 		if (c == -1)
-		break;
-		uart_putc_sync(c);
+		    break;
+        
+        
+        if (c == 10 || c == 13) { // \n \r
+            uart_putc_sync('\r');
+            uart_putc_sync('\n');
+        }
+        else if (c == 8 || c == 127) { // \b
+            uart_putc_sync('\b');
+            uart_putc_sync(' ');
+            uart_putc_sync('\b');
+        }
+        else
+		    uart_putc_sync(c);
 	}
 }
