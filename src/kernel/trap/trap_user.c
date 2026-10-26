@@ -46,8 +46,8 @@ void trap_user_handler()
                 break;
 
             default: // 例外处理
-                printf("\nunexpected interrupt: %s\n", interrupt_info[trap_id]);
-                printf("trap_id = %d, sepc = %p, stval = %p\n", trap_id, sepc, stval);
+                printf("\nunexpected interrupt: %s\n", trap_id < 16 ? interrupt_info[trap_id] : "unknown interrupt");
+                printf("trap_id = %x, sepc = %x, stval = %x\n", trap_id, sepc, stval);
                 panic("trap_user_handler");
         }
     }
@@ -73,9 +73,16 @@ void trap_user_handler()
             }
 
             default: // 例外处理
-                printf("\nunexpected exception: %s\n", exception_info[trap_id]);
-                printf("trap_id = %d, sepc = %p, stval = %p\n", trap_id, sepc, stval);
-                panic("trap_user_handler");
+                printf("\nunexpected exception: %s\n", trap_id < 16 ? exception_info[trap_id] : "unknown exception");
+                printf("trap_id = %x, sepc = %x, stval = %x\n", trap_id, sepc, stval);
+                printf("process %d stopped; kernel remains active\n", proc->pid);
+                // 本阶段没有调度器：停止用户执行，保留资源供诊断。
+                // stvec 已指向 kernel_vector，等待期间仍处理内核中断。
+                mycpu()->proc = NULL;
+                intr_on();
+                for (;;) {
+                    asm volatile("wfi");
+                }
         }
     }
 

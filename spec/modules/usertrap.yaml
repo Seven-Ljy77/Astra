@@ -34,10 +34,10 @@ functions:
     - 时钟中断调用 timer_interrupt_handler，外部中断调用 external_interrupt_handler；不推进保存的用户 PC。
     - U-mode ecall 从 tf.a7 读取系统调用号；SYS_helloworld 输出 proczero hello world 消息并设置 tf.a0 为 0，未知调用设置 tf.a0 为 uint64 表示的 -1。
     - 对 ecall 将保存的用户 PC 增加 4，跳过 ecall 指令。
-    - 可恢复的处理完成后调用 trap_user_return；用户执行错误输出诊断并停止故障用户执行，不再返回该故障指令。
+    - 可恢复的处理完成后调用 trap_user_return；用户执行错误输出诊断、清空当前 cpu.proc，并在开启中断的内核 wfi 循环中停止故障用户执行。
     post:
     - 系统调用或已处理的中断经 trap_user_return 返回 U-mode；除规定修改的返回值与 PC 外，用户现场保持可继续执行。
-    - 用户错误不触发整个内核 panic；内核执行状态矛盾属于内核不变量错误。
+    - 用户错误不触发整个内核 panic，不再返回用户态；本阶段保留故障进程资源供诊断，不实现完整退出或资源回收。内核执行状态矛盾属于内核不变量错误。
     - 诊断原因编号时不得越界访问提示数组，正常返回用户态的路径不返回本函数的调用位置。
 
   void trap_user_return(void):
