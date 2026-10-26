@@ -2,8 +2,8 @@
 
 // 这个文件通过make build生成, 是proczero对应的ELF文件
 #include "../../user/initcode.h"
-#define initcode target_user_initcode
-#define initcode_len target_user_initcode_len
+#define initcode target_user_initcode_bin
+#define initcode_len target_user_initcode_bin_len
 
 // in trampoline.S
 extern char trampoline[];

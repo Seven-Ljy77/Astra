@@ -111,7 +111,7 @@ $(NakedUser): $(ELFUser)
 
 # 转换成内核可以直接使用的数组
 $(InitcodeHeader): $(NakedUser)
-	xxd -i -n target_user_initcode $< > $@
+	xxd -i $< > $@
 
 # proc.c会#include initcode.h, 因此它必须等待initcode生成完毕
 $(TARGET)/kernel/proc/proc.o: $(InitcodeHeader)
