@@ -25,19 +25,36 @@ functions:
 
   void trap_user_handler(void):
     pre:
-    - 
+    - 由 user_vector 从 U-mode trap 进入，sstatus.SPP 为 0，当前中断关闭。
+    - 当前使用内核页表和当前进程的内核栈，tp 保存有效 hart ID，myproc() 及其 tf 有效。
+    - 用户通用寄存器已保存到 trapframe，sepc、scause、stval 保存本次 trap 的现场信息。
     effects:
-    - 
+    - 将 stvec 切换为 kernel_vector，供内核执行期间的 trap 使用。
+    - 将 sepc 保存到当前进程 tf.user_to_kern_epc，读取 scause 并区分中断与异常。
+    - 时钟中断调用 timer_interrupt_handler，外部中断调用 external_interrupt_handler；不推进保存的用户 PC。
+    - U-mode ecall 从 tf.a7 读取系统调用号；SYS_helloworld 输出 proczero hello world 消息并设置 tf.a0 为 0，未知调用设置 tf.a0 为 uint64 表示的 -1。
+    - 对 ecall 将保存的用户 PC 增加 4，跳过 ecall 指令。
+    - 可恢复的处理完成后调用 trap_user_return；用户执行错误输出诊断并停止故障用户执行，不再返回该故障指令。
     post:
-    - 
+    - 系统调用或已处理的中断经 trap_user_return 返回 U-mode；除规定修改的返回值与 PC 外，用户现场保持可继续执行。
+    - 用户错误不触发整个内核 panic；内核执行状态矛盾属于内核不变量错误。
+    - 诊断原因编号时不得越界访问提示数组，正常返回用户态的路径不返回本函数的调用位置。
 
   void trap_user_return(void):
     pre:
-    - 
+    - 当前在 S-mode 使用内核页表，tp 保存有效 hart ID，myproc()、tf 和用户页表均有效。
+    - 用户代码、用户栈、TRAPFRAME 和 TRAMPOLINE 映射已准备好，trapframe 中的用户寄存器和返回 PC 有效。
+    - 当前进程内核栈已在内核页表中映射；两张页表在 TRAMPOLINE 映射同一代码物理页。
     effects:
-    - 
+    - 关闭当前 hart 的 S-mode 中断响应，防止返回准备过程被中断打断。
+    - 在 trapframe 中填写当前内核 satp、进程内核栈顶、trap_user_handler 地址和 hart ID，供下一次用户 trap 使用。
+    - 将 stvec 设置为 TRAMPOLINE 加 user_vector 段内偏移，将 sepc 设置为 tf.user_to_kern_epc。
+    - 清除 sstatus.SPP，设置 sstatus.SPIE，保留其他状态位，准备 sret 返回 U-mode。
+    - 计算 user_return 的 TRAMPOLINE 高虚拟地址，以 TRAPFRAME 和 MAKE_SATP(proc.pgtbl) 为参数调用它。
     post:
-    - 
+    - 经 user_return 切换用户页表、恢复用户寄存器并执行 sret，从保存的用户 PC 进入或继续 U-mode，不正常返回。
+    - 不把保存的用户 sp 和 PC 重置为初始值；下一次用户 trap 经 user_vector 使用已准备的内核入口信息。
+    - 用户态期间 sscratch 保存 TRAPFRAME，用户可访问页面及特殊页面的权限保持不变。
 
   user_return:
     pre:
