@@ -124,3 +124,8 @@ typedef pte_t *pgtbl_t;
 
 // 定义一个非常大的VA, 正常来说所有VA不得大于它
 #define VA_MAX (1ul << 38)
+
+#define TRAMPOLINE (VA_MAX - PGSIZE)
+#define TRAPFRAME  (TRAMPOLINE - PGSIZE)
+#define KSTACK(i)  (TRAMPOLINE - ((i) + 1) * 2 * PGSIZE)
+// 每个内核栈占一页，相邻内核栈之间留一页未映射的保护页

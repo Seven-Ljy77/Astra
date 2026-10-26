@@ -1,5 +1,7 @@
 #include "mod.h"
 
+extern char trampoline[];
+
 // 内核页表
 static pgtbl_t kernel_pgtbl;
 
@@ -68,10 +70,11 @@ void vm_mappages(pgtbl_t pgtbl, uint64 va, uint64 pa, uint64 len, int perm)
 
         *pte = PA_TO_PTE(pa + i - va);
 
-        (*pte) = ((*pte) & (~PTE_R)) | (perm & PTE_R);
-        (*pte) = ((*pte) & (~PTE_W)) | (perm & PTE_W);
-        (*pte) = ((*pte) & (~PTE_X)) | (perm & PTE_X);
-        (*pte) = ((*pte) & (~PTE_V)) | (1 & PTE_V);
+        *pte = ((*pte) & (~PTE_R)) | (perm & PTE_R);
+        *pte = ((*pte) & (~PTE_W)) | (perm & PTE_W);
+        *pte = ((*pte) & (~PTE_X)) | (perm & PTE_X);
+        *pte = ((*pte) & (~PTE_U)) | (perm & PTE_U);
+        *pte = ((*pte) & (~PTE_V)) | (1 & PTE_V);
     }
 }
 
@@ -119,6 +122,14 @@ void kvm_init()
     vm_mappages(kernel_pgtbl , (uint64)PLIC_BASE , (uint64)PLIC_BASE , (uint64)PLIC_SIZE , PTE_R | PTE_W);
     vm_mappages(kernel_pgtbl , (uint64)KERNEL_BASE , (uint64)KERNEL_BASE , (uint64)KERNEL_DATA - (uint64)KERNEL_BASE , PTE_R | PTE_X);
     vm_mappages(kernel_pgtbl , (uint64)KERNEL_DATA , (uint64)KERNEL_DATA , (uint64)ALLOC_END - (uint64)KERNEL_DATA , PTE_R | PTE_W);
+
+    // 还要映射 trampoline 和 KSTACK(0)
+    vm_mappages(kernel_pgtbl , (uint64)TRAMPOLINE , (uint64)trampoline , (uint64)PGSIZE , PTE_R | PTE_X);
+
+    // kstask 还没申请内存
+    void *kstack = pmem_alloc(true);
+    vm_mappages(kernel_pgtbl , (uint64)KSTACK(0) , (uint64)kstack , (uint64)PGSIZE , PTE_R | PTE_W);
+
 }
 
 // 每个CPU都需要调用, 从不使用页表切换到使用内核页表

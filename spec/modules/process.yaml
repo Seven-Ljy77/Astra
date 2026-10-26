@@ -33,19 +33,34 @@ functions:
 
   pgtbl_t proc_pgtbl_init(uint64 trapframe):
     pre:
-    - 
+    - 当前处于 S-mode，物理内存分配器已初始化。
+    - trapframe 是调用者已分配并持有的、页对齐的有效物理页地址。
+    - trampoline 代码已存在于页对齐的物理页中，且大小不超过一页。
     effects:
-    - 
+    - 分配并清零根页表，以及建立映射所需的中间页表页。
+    - 将 TRAMPOLINE 映射到 trampoline 代码物理页，权限为 R、X，不含 PTE_U。
+    - 将 TRAPFRAME 映射到参数 trapframe 指定的物理页，权限为 R、W，不含 PTE_U。
     post:
-    - 
+    - 成功返回新建的 Sv39 根页表指针，仅包含上述两处有效叶映射；零页、用户代码和用户栈尚未映射。
+    - 不切换当前页表，不修改 trapframe 页内容，不改变进程或 CPU 的状态。
+    - 分配或映射失败直接 panic 锁死。
 
   void proc_make_first(void):
     pre:
-    - 
+    - 仅由 hart0 在 S-mode 单次调用，tp 保存有效 hart ID，首进程尚未发布。
+    - 物理分配器、内核页表和本 hart 的 trap 环境已初始化，KSTACK(0) 已映射一页 RW 内核栈。
+    - initcode 长度不超过 PGSIZE，链接入口为用户虚拟地址 0x1000；trap_user_return 已实现。
     effects:
-    - 
+    - 设置 pid 为 0，从内核区分配清零 trapframe 页，创建用户页表并保存 tf 和 pgtbl。
+    - 从用户区分配一页用户栈，在 TRAPFRAME-PGSIZE 建立 RWU 映射，设置 ustack_npage 为 1。
+    - 从用户区分配一页代码内存，复制 initcode_len 字节，在 0x1000 建立 RXU 映射，设置 heap_top 为 0x2000。
+    - 设置 tf.sp 为 TRAPFRAME、tf.user_to_kern_epc 为 0x1000，其余初始用户通用寄存器保持零。
+    - 设置 kstack 为 KSTACK(0)、ctx.sp 为 kstack+PGSIZE、ctx.ra 为 trap_user_return 地址。
+    - 资源和现场准备完成后发布当前 cpu.proc，再调用 swtch 保存 CPU 内核上下文并恢复进程上下文。
     post:
-    - 
+    - 成功经 trap_user_return 首次进入 U-mode，从 0x1000 执行用户代码，不正常返回调用者。
+    - 零页未映射，TRAMPOLINE 和 TRAPFRAME 不含 PTE_U；首进程仅由 hart0 发布和运行。
+    - 构造失败时不发布 cpu.proc，回收临时资源，不遗留半初始化进程。
 
   void swtch(context_t *old, context_t *new):
     pre:

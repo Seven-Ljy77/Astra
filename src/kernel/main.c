@@ -1,6 +1,7 @@
 #include "arch/mod.h"
 #include "lib/mod.h"
 #include "mem/mod.h"
+#include "proc/mod.h"
 
 static volatile int started = 0;
 
@@ -55,6 +56,9 @@ int main()
         
         printf("CPU %d is booting !\n" , cpuid);
     }
+
+    if (cpuid == 0)
+        proc_make_first();
 
     while (1) {}
 

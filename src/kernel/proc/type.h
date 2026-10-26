@@ -64,6 +64,7 @@ typedef struct trapframe
     /* 272 */ uint64 t5;
     /* 280 */ uint64 t6;
 } trapframe_t;
+// trapframe 用于在陷入内核时，备份用户态的寄存器状态
 
 // 外部结构体
 typedef uint64 *pgtbl_t;
@@ -78,6 +79,7 @@ typedef struct proc
     uint64 ustack_npage; // 用户栈占用的页面数量
     trapframe_t *tf;     // 用户态内核态切换时的运行环境暂存空间
 
+    // 指定陷入内核后的内核栈以及上下文
     uint64 kstack;       // 内核栈的虚拟地址
     context_t ctx;       // 内核态进程上下文
 } proc_t;
