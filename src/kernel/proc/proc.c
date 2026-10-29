@@ -1,9 +1,9 @@
 #include "mod.h"
 
 // 这个文件通过make build生成, 是proczero对应的ELF文件
-#include "../../user/initcode.h"
-#define initcode target_user_initcode_bin
-#define initcode_len target_user_initcode_bin_len
+#include "initcode.h"
+#define initcode target_user_initcode
+#define initcode_len target_user_initcode_len
 
 // in trampoline.S
 extern char trampoline[];
@@ -52,6 +52,7 @@ void proc_make_first()
 {
     // 设置 pid
     proczero.pid = 0;
+    // TODO(Lab5): 初始化 proczero.mmap，保留现有进程创建逻辑。
 
     // 申请 trapframe 物理页并同时映射 trapframe 和 trampoline
     trapframe_t *trapframe = pmem_alloc(true);

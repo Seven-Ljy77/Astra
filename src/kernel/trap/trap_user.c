@@ -55,7 +55,10 @@ void trap_user_handler()
         // 异常
         switch (trap_id) // 异常产生原因分类
         {
+            // TODO(Lab5): 增加 load/store page fault 处理。
             case 8: {
+                // TODO(Lab5): 接入 syscall()；下方仅保留 Lab4 实现作为学习记录。
+#if 0
                 uint64 a7 = proc->tf->a7;
                 switch (a7)
                 {
@@ -68,6 +71,9 @@ void trap_user_handler()
                         proc->tf->a0 = (uint64)-1;
                         break;
                 }
+#endif
+                // 通用系统调用尚未实现，暂返回失败。
+                proc->tf->a0 = (uint64)-1;
                 proc->tf->user_to_kern_epc += 4;
                 break;
             }

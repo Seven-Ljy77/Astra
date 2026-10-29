@@ -68,7 +68,7 @@ void vm_mappages(pgtbl_t pgtbl, uint64 va, uint64 pa, uint64 len, int perm)
 
         assert((pte != NULL) , "Getpte Failed");
 
-        *pte = PA_TO_PTE(pa + i - va);
+        *pte = PA_TO_PTE(pa + i - va) | PTE_MACHINE;
 
         *pte = ((*pte) & (~PTE_R)) | (perm & PTE_R);
         *pte = ((*pte) & (~PTE_W)) | (perm & PTE_W);

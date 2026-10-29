@@ -5,7 +5,7 @@ owns:
 - src/kernel/mem/type.h
 - src/kernel/mem/method.h
 state:
-  physical_layout: QEMU物理内存为[0x80000000, 0x88200000)；OpenSBI占用前2MiB，KERNEL_BASE为0x80200000，可分配区由ALLOC_BEGIN和ALLOC_END界定。
+  physical_layout: QEMU的KERNEL_BASE=0x80200000、ALLOC_END=0x88200000；VF2的KERNEL_BASE由学生填写，并与链接入口及128MiB管理窗口一致。ALLOC_BEGIN为包含BSS的内核占用区之后的页对齐位置；不得覆盖固件、保留内存或DTB。
   kern_region: 从页对齐的ALLOC_BEGIN开始、长度为KERN_PAGES个PGSIZE的区域，提供页表与内核页；当前KERN_PAGES为1024。
   user_region: 紧接kern_region直到页对齐的ALLOC_END，提供用户页。
   page_node_t.next: 空闲页开头的链表指针，页面分配后由调用者占用。
@@ -14,7 +14,7 @@ state:
 rules:
 - PGSIZE为4096；物理分配区域互不重叠，不含OpenSBI或内核镜像，allocable等于对应空闲链表的页面数。
 - 每个物理页只处于一个空闲链表或由一个所有者持有；链表与计数只在区域锁下修改。
-- 页表中间项只有 PTE_V，叶项至少有 R 或 X；W 必须同时有 R；PA 与页表页均页对齐。
+- 页表中间项只有 PTE_V，叶项至少有 R 或 X；W 必须同时有 R；PA 与页表页均页对齐。PTE_MACHINE在QEMU为0，VF2由学生填写，仅加到叶项；硬件A/D不是用户权限。
 - 页表修改由调用者串行化；本模块不自动执行其他 hart 的 TLB shootdown；撤销活动映射后使用或归还物理页之前须完成所需失效。
 - 运行时分配或映射失败返回定义的失败值；回收本次创建的中间页和临时资源，不改变已发布的映射或泄漏页。
 - TRAMPOLINE 为 VA_MAX-PAGE_SIZE，TRAPFRAME 为 TRAMPOLINE-PAGE_SIZE；KSTACK(i) 为 TRAMPOLINE-(i+1)*2*PAGE_SIZE，每个内核栈之上的保护页保持未映射。
@@ -62,7 +62,7 @@ functions:
     pre:
     - 非 NULL 页表有效且由调用者独占修改；成功映射后调用者管理物理页的所有权与寿命。
     effects:
-    - 把 len 向上取整到页面，为连续虚拟页建立连续物理叶项；叶项为 PA_TO_PTE(pa+offset) | perm | PTE_V。
+    - 把 len 向上取整到页面，为连续虚拟页建立连续物理叶项；叶项为 PA_TO_PTE(pa+offset) | perm | PTE_V | PTE_MACHINE。
     post:
     - 成功返回 0，覆盖 [va, va+PGROUNDUP(len))；不会替换已有有效映射。
     - NULL 根、未对齐 va 或 pa、零长度、地址范围或向上取整溢出、物理地址不可编码、非法权限、已有映射或分配不足返回 -1。

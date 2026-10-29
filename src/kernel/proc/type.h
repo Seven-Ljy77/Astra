@@ -25,11 +25,11 @@ typedef struct context
 // 跨优先级的上下文
 typedef struct trapframe
 {
-    /*   0 */ uint64 user_to_kern_satp;        // kernel page table
-    /*   8 */ uint64 user_to_kern_sp;          // top of process's kernel stack
-    /*  16 */ uint64 user_to_kern_trapvector;  // usertrap()
-    /*  24 */ uint64 user_to_kern_epc;         // saved user program counter
-    /*  32 */ uint64 user_to_kern_hartid;      // saved kernel tp
+    /*   0 */ uint64 user_to_kern_satp;       // kernel page table
+    /*   8 */ uint64 user_to_kern_sp;         // top of process's kernel stack
+    /*  16 */ uint64 user_to_kern_trapvector; // usertrap()
+    /*  24 */ uint64 user_to_kern_epc;        // saved user program counter
+    /*  32 */ uint64 user_to_kern_hartid;     // saved kernel tp
 
     // 全部通用寄存器
     /*  40 */ uint64 ra;
@@ -64,10 +64,10 @@ typedef struct trapframe
     /* 272 */ uint64 t5;
     /* 280 */ uint64 t6;
 } trapframe_t;
-// trapframe 用于在陷入内核时，备份用户态的寄存器状态
 
 // 外部结构体
 typedef uint64 *pgtbl_t;
+typedef struct mmap_region mmap_region_t;
 
 // 进程
 typedef struct proc
@@ -77,9 +77,9 @@ typedef struct proc
     pgtbl_t pgtbl;       // 用户态页表
     uint64 heap_top;     // 用户堆顶(以字节为单位)
     uint64 ustack_npage; // 用户栈占用的页面数量
+    mmap_region_t *mmap; // 用户态mmap区域
     trapframe_t *tf;     // 用户态内核态切换时的运行环境暂存空间
 
-    // 指定陷入内核后的内核栈以及上下文
-    uint64 kstack;       // 内核栈的虚拟地址
-    context_t ctx;       // 内核态进程上下文
+    uint64 kstack; // 内核栈的虚拟地址
+    context_t ctx; // 内核态进程上下文
 } proc_t;

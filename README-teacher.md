@@ -1,101 +1,109 @@
-# LAB-4: 第一个用户进程的诞生
+# LAB-5: 系统调用流程建立 + 用户态虚拟内存管理
 
 **前言**
 
-LAB-1到LAB-3属于第一阶段: **基础设施建设**
+在lab-4中, 我们初步实现了第一个用户进程`proczero`
 
-从LAB-4开始, OS内核的构建进入第二阶段: **用户进程管理**
+它通过`sys_helloworld`系统调用, 利用内核的系统服务发出了"第一声啼哭"
 
-到目前为止, OS内核只是一个能够掌控硬件的高权限(S-mode)程序
+本次实验的核心目的是完善和发展`proczero`, 具体包括两个方面:
 
-然而, 内核最核心的作用其实是为低权限的用户进程提供安全、共享、便捷的系统服务
+- 赋予`proczero`更强的内存掌控能力, 包括堆、栈、离散映射三个部分
 
-引入进程模块并不是一件简单的事情, 你是否也感到无从下手呢?
-
-按照"从简单到复杂"的基本原则, 我们先来研究"第一个用户进程是怎么一步步诞生的"
-
-本次实验的**核心目标**: 用户进程向内核发出一个syscall, 内核收到后输出`proczero: hello world\n`进行响应
+- 赋予`proczero`完善的请求服务能力, 建立真正的系统调用流程
 
 ## 代码组织结构
 
 ```
-ecnu-oslab-2026-task
-├── .gitignore     Git忽略规则
+ECNU-OSLAB-2025-TASK
 ├── LICENSE        开源协议
-├── registers.xml  GDB寄存器描述
-├── common.mk      Makefile中通用的工具链定义
-├── Makefile       编译运行整个项目
-├── kernel.ld      内核链接布局 (CHANGE, 支持trampsec)
+├── .vscode        配置了可视化调试环境
+├── registers.xml  配置了可视化调试环境
+├── .gdbinit.tmp-riscv xv6自带的调试配置
+├── common.mk      Makefile中一些工具链的定义
+├── Makefile       编译运行整个项目 (CHANGE, PLATFORM=qemu/vf2)
+├── kernel.ld      定义了内核程序在链接时的布局 (CHANGE, 条件编译入口地址)
 ├── pictures       README使用的图片目录 (CHANGE, 日常更新)
-├── spec           系统规格与各实验验收契约 (NEW)
-│   ├── design.yaml (NEW)
-│   ├── modules     模块契约 (NEW)
-│   │   ├── arch.yaml (NEW)
-│   │   ├── boot.yaml (NEW)
-│   │   ├── console.yaml (NEW)
-│   │   ├── lock.yaml (NEW)
-│   │   ├── memory.yaml (NEW)
-│   │   ├── process.yaml (TODO,填写function内容)
-│   │   ├── toolchain.yaml (NEW)
-│   │   ├── trap.yaml (NEW)
-│   │   ├── user.yaml (NEW)
-│   │   └── usertrap.yaml (TODO,填写function内容)
-│   └── patches     各实验增量与验收场景 (NEW)
-│       ├── lab1.yaml (NEW)
-│       ├── lab2.yaml (NEW)
-│       ├── lab3.yaml (NEW)
-│       └── lab4.yaml (NEW)
+├── spec           系统规格与各实验验收契约
+│   ├── design.yaml (CHANGE, Lab5总体设计)
+│   ├── modules     模块契约
+│   │   ├── arch.yaml
+│   │   ├── boot.yaml
+│   │   ├── console.yaml
+│   │   ├── lock.yaml
+│   │   ├── memory.yaml
+│   │   ├── process.yaml
+│   │   ├── syscall.yaml (NEW)
+│   │   ├── toolchain.yaml
+│   │   ├── trap.yaml
+│   │   ├── user.yaml
+│   │   ├── usertrap.yaml
+│   │   └── uvm.yaml (NEW)
+│   └── patches     各实验增量与验收场景
+│       ├── lab1.yaml
+│       ├── lab2.yaml
+│       ├── lab3.yaml
+│       ├── lab4.yaml
+│       └── lab5.yaml (NEW)
 ├── README.md      实验指导书 (CHANGE, 日常更新)
-└── src            源码(之后不需要再手写代码,只需完成spec的TODO设计即可)
+└── src            源码
     ├── kernel     内核源码
     │   ├── arch   RISC-V相关
     │   │   ├── method.h
     │   │   ├── mod.h
-    │   │   ├── sbi.c
-    │   │   └── type.h
+    │   │   └── type.h (TODO, NCPU与FIRST_HART)
     │   ├── boot   机器启动
-    │   │   ├── entry.S
-    │   │   └── start.c
+    │   │   ├── entry.S (CHANGE, Image头与次级入口)
+    │   │   └── start.c (CHANGE, boot_hartid)
     │   ├── lock   锁机制
     │   │   ├── spinlock.c
     │   │   ├── method.h
     │   │   ├── mod.h
     │   │   └── type.h
     │   ├── lib    常用库
-    │   │   ├── cpu.c (CHANGE, 新增myproc函数)
+    │   │   ├── cpu.c
     │   │   ├── print.c
-    │   │   ├── uart.c
+    │   │   ├── uart.c (CHANGE, 开发板寄存器宽度)
     │   │   ├── utils.c
-    │   │   ├── method.h (CHANGE, 新增myproc函数)
+    │   │   ├── method.h (CHANGE)
     │   │   ├── mod.h
-    │   │   └── type.h (CHANGE, 扩充CPU结构体 + 帮助)
+    │   │   └── type.h (TODO, UART)
     │   ├── mem    内存模块
     │   │   ├── pmem.c
-    │   │   ├── kvm.c (TODO, 增加内核页表的映射内容 trampoline + KSTACK(0))
+    │   │   ├── kvm.c
+    │   │   ├── uvm.c (TODO, 用户态虚拟内存管理主体)
+    │   │   ├── mmap.c (TODO, mmap节点资源仓库)
+    │   │   ├── method.h (CHANGE, 日常更新)
+    │   │   ├── mod.h
+    │   │   └── type.h (TODO, KERNEL_BASE与PTE_MACHINE)
+    │   ├── trap   陷阱模块
+    │   │   ├── plic.c (CHANGE)
+    │   │   ├── timer.c
+    │   │   ├── trap_kernel.c (CHANGE, boot_hartid)
+    │   │   ├── trap_user.c (TODO, 系统调用处理 + pagefault处理)
+    │   │   ├── trap.S
+    │   │   ├── trampoline.S
+    │   │   ├── method.h
+    │   │   ├── mod.h (CHANGE, 日常更新)
+    │   │   └── type.h (TODO, INTERVAL与PLIC)
+    │   ├── proc   进程模块
+    │   │   ├── proc.c (TODO, proczero->mmap初始化)
+    │   │   ├── swtch.S
     │   │   ├── method.h
     │   │   ├── mod.h
-    │   │   └── type.h
-    │   ├── trap   陷阱模块
-    │   │   ├── plic.c
-    │   │   ├── timer.c
-    │   │   ├── trap_kernel.c (CHANGE, 去掉了提示信息的static标记)
-    │   │   ├── trap_user.c (TODO, 用户态陷阱处理)
-    │   │   ├── trap.S
-    │   │   ├── method.h (CHANGE, 增加函数定义)
-    │   │   ├── mod.h
-    │   │   └── type.h
-    │   ├── proc   进程模块
-    │   │   ├── proc.c (TODO, 进程管理核心逻辑)
-    │   │   ├── swtch.S (NEW, 上下文切换)
+    │   │   └── type.h (CHANGE, 进程结构体里新增mmap字段)
+    │   ├── syscall 系统调用模块
+    │   │   ├── syscall.c (NEW, 系统调用通用逻辑)
+    │   │   ├── sysfunc.c (TODO, 各个系统调用的处理逻辑) 
     │   │   ├── method.h (NEW)
     │   │   ├── mod.h (NEW)
     │   │   └── type.h (NEW)
-    │   └── main.c (CHANGE, 日常更新)
+    │   └── main.c (CHANGE, boot_hartid)
     └── user       用户程序
-        ├── initcode.c (NEW)
-        ├── sys.h (NEW)
-        ├── syscall_arch.h (NEW)
-        └── syscall_num.h (NEW)
+        ├── initcode.c (CHANGE, 按照测试需求来设置)
+        ├── sys.h
+        ├── syscall_arch.h
+        └── syscall_num.h (CHANGE, 日常更新)
 ```
 
 **标记说明**
@@ -104,244 +112,601 @@ ecnu-oslab-2026-task
 
 **CHANGE**: 旧的源文件发生了更新, 直接拷贝即可, 无需修改
 
-**TODO**: 你需要实现新功能 / 你需要完善旧功能 / 你需要完善的spec文档
+**TODO**: 你需要实现新功能 / 你需要完善旧功能
 
-## 进程的定义和地址空间布局
+## 从QEMU走向VisionFive2
 
-### 用户进程诞生之前
+本次实验默认在QEMU上完成, 同时也要把**当前内核已经具备的全部功能**做到**VisionFive2**(昉 星光2)开发板上
 
-进程指的是一个具备运行状态的程序(在Linux环境下就是ELF文件)
+开发板链接: https://www.starfivetech.com/site/boards
 
-也就是说进程由静态的可执行文件 + 动态的执行状态构成 (寄存器上下文、内存占用等)
+这不是另一份内核。启动、时钟、串口、中断、物理内存、页表、锁、进程和系统调用, 在开发板上都要能工作。后面任务1到任务5的测试同样要在开发板上跑通
 
-在某种意义上, OS内核本身也可以视为一种进程 (它符合进程的定义, 虽然一般不叫它进程)
+开发板沿用板上已有的OpenSBI和U-Boot, 不需要自己编译或刷写固件
 
-用户进程诞生之前, OS内核基于**boot/start.c**中定义的函数栈`CPU_stack`+**mem/kvm.c**中定义的`kernel_pgtbl`运行
+核数、hart编号、内核加载地址、UART/PLIC的访问方式和中断号、时钟频率, 请查阅芯片手册、板上DTB或U-Boot的`bdinfo`, 不要照搬QEMU的数字
 
-它的主逻辑位于**main.c**, 进行了一系列系统资源初始化, 随后执行死循环`while(1)`, 期间穿插trap的中断异常处理过程
+### 第0步: 编译
 
-这就是用户进程诞生之前OS内核的状态
+QEMU是默认平台:
 
-### 用户进程的定义
+```
+make
+make run
+```
 
-这启发我们, 用户进程也至少要有**用户栈 + 用户页表**来支持它的运行
+产物位于`target/qemu/kernel/kernel-qemu.elf`
 
-除此之外, 用户进程还需要记录哪些信息呢?
+开发板需要显式选择平台:
 
-- 与**用户栈**对应的连续内存空间——**用户堆**
+```
+make PLATFORM=vf2
+```
 
-- 用户进程陷入内核后, 需要有临时的函数执行空间——**内核栈**
+产物位于`target/vf2/kernel/kernel-vf2.elf`和同目录的`kernel-vf2.bin`
 
-- 用户进程陷入内核前, 必须保存用户执行流的上下文——**trapframe**
+`make run PLATFORM=vf2`不会启动QEMU, 请用U-Boot的`booti`加载`kernel-vf2.bin`
 
-- 用户进程在内核中发生切换, 必须保存内核执行流的上下文——**context**
+### 第1步: OpenSBI、条件编译和平台常量
 
-- 用户进程应该有一个自己的代号——**pid**
+当前内核从OpenSBI交接后一直运行在S-mode, 不再自己做M-mode委托
+
+我们希望同时兼容QEMU和VisionFive2, 编译开发板内核时会加上`CFLAGS += -DVISIONFIVE2`
 
 ```c
-// 进程
-typedef struct proc
+#ifdef VISIONFIVE2
+// 开发板一侧的常量, 请查阅手册或DTB后填写
+#else
+// QEMU一侧已经给出
+#endif
+```
+
+请你完成开发板一侧的常量, 以及`spec/design.yaml`里`machine.platforms.vf2`的各个字段:
+
+- `src/kernel/arch/type.h` 的`NCPU`、`FIRST_HART`
+
+- `src/kernel/mem/type.h` 的`KERNEL_BASE`、`PTE_MACHINE`
+
+- `src/kernel/trap/type.h` 的`INTERVAL`、`PLIC_SCONTEXT`
+
+- `src/kernel/lib/type.h` 的`Reg`、`UART_IRQ`
+
+- `kernel.ld` 的 VISIONFIVE2 链接起点, 必须和`KERNEL_BASE`一致
+
+填写前`make PLATFORM=vf2`过不了编译, 这是正常的
+
+### 第2步: 内核启动路径
+
+启动核的路径是: **OpenSBI** -> **entry.S 的 _entry** -> **start.c** -> **main.c**
+
+其他有效hart由启动核通过SBI HSM唤醒, 从`_entry_secondary`进入, 不会再次清BSS
+
+请查阅开发板的hart布局后再填写`NCPU`和`FIRST_HART`。有效hart满足`FIRST_HART <= hartid < NCPU`, 用物理hart ID做下标, 不要改成逻辑编号
+
+`boot_hartid`记录实际启动的那个hart, 不要求它固定为0。`start.c`里请你完成`w_tp`并进入`main`
+
+### 第3步: 时钟
+
+S-mode通过`r_time`读时间, 通过`sbi_set_timer`设置下一次绝对时间。每个hart都要处理自己的时钟中断, 只有启动核更新共享的`ticks`
+
+`timer_init`已经给出。请你填写`INTERVAL`, 让两套平台都大约0.1s触发一次, 并完成`timer_create`、`timer_update`、`timer_get_ticks`
+
+`timer_interrupt_handler`里请补上`sbi_set_timer(r_time() + INTERVAL)`, 否则同一拍中断会连打
+
+### 第4步: 串口和PLIC
+
+本实验在开发板上直接访问UART和PLIC, 不使用SBI legacy console
+
+`uart_init`、`uart_enable_rx_interrupt`和`plic_inithart`已经给出。请查阅手册或DTB, 填写`Reg`、`UART_IRQ`、`PLIC_SCONTEXT`
+
+开发板的串口沿用U-Boot已经正常工作的配置, 内核不要重配波特率。RX中断只在本核PLIC、stvec、SEIE就绪后由启动核打开一次, 不要打开TX空中断
+
+请你完成`external_interrupt_handler`: claim到UART就交给`uart_intr`, 非零IRQ处理完必须complete
+
+`trap_kernel_handler`里请接上S-mode时钟中断和S-mode外部中断。`uart_intr`的退格和换行编辑仍按原实验要求补全
+
+### 第5步: 页表项和内存映射
+
+请查阅手册后填写`KERNEL_BASE`和`PTE_MACHINE`
+
+`vm_mappages`给叶项赋值时, 在原有权限和`PTE_V`之外还要带上`PTE_MACHINE`; 非叶项仍然只设置`PTE_V`
+
+`kvm_init`仍要完成UART首4KiB和完整PLIC的映射, 以及内核代码、数据、可分配区。`sbi_remote_sfence_vma`已经提供, 当前单用户阶段不要求每次改页表都做远程刷新
+
+`pmem_init`等物理内存函数同样要在开发板上工作, 管理窗口不要和固件、U-Boot、DTB打架
+
+### 第6步: 锁、进程和系统调用
+
+自旋锁、用户页表、copyin/copyout、brk、mmap、syscall 这些空函数, 开发板上也要全部实现
+
+启动核创建并进入唯一用户进程, 辅助hart完成本地初始化后留在可响应中断的`wfi`。不要为开发板另写一套用户程序
+
+### 第7步: 加载和上板
+
+加载前请用手册、DTB和`bdinfo`确认: 串口已经能输出, DRAM布局和内核窗口不冲突, 匹配板卡的DTB放在内核管理窗口外面。内核不解析DTB
+
+地址请自己填, 不要套用QEMU的数字:
+
+```
+setenv kernel_addr_r <与KERNEL_BASE一致的地址>
+setenv fdt_addr_r <管理窗口外的DTB地址>
+```
+
+**从存储加载** (先用`mmc list`和`part list`确认设备和分区, 下面的1:1只是写法示例):
+
+```
+load mmc 1:1 ${kernel_addr_r} kernel-vf2.bin
+load mmc 1:1 ${fdt_addr_r} <与板卡匹配的.dtb>
+booti ${kernel_addr_r} - ${fdt_addr_r}
+```
+
+**从TFTP加载** (`ipaddr`和`serverip`按实验室网络设置, 不要`saveenv`):
+
+```
+tftpboot ${kernel_addr_r} kernel-vf2.bin
+tftpboot ${fdt_addr_r} <与板卡匹配的.dtb>
+booti ${kernel_addr_r} - ${fdt_addr_r}
+```
+
+加载失败就停下来, 不要booti内存里的旧镜像
+
+期望每个有效hart各打印一次启动信息, 手册或DTB里不跑内核的hart不应出现
+
+## 任务1：用户态和内核态的数据迁移
+
+回忆一下上个实验的`sys_helloworld`系统调用, 它的作用是让内核输出`"hello world"`
+
+一个明显的问题: 用户态程序无法向内核程序传递参数, 导致系统服务非常僵硬和受限
+
+我们可以从普通函数的参数传递获得启示, 传参方法无非两种:
+
+- 直接传递值: `add(int a, int b)`, 本质是将参数值放到寄存器里
+
+- 基于地址做间接传递: `strcmp(char *s1, char *s2, int len)`, 本质是将地址放到寄存器里
+
+通过阅读`user/syscall_arch.h`, 可以发现系统调用编号默认放在a7寄存器, a0到a5寄存器则是存放参数
+
+```c
+static inline long __syscall6(long n, long a, long b, long c, long d, long e, long f)
 {
-    int pid; // 标识符
-
-    pgtbl_t pgtbl;       // 用户态页表
-    uint64 heap_top;     // 用户堆顶(以字节为单位)
-    uint64 ustack_npage; // 用户栈占用的页面数量
-    trapframe_t *tf;     // 用户态内核态切换时的运行环境暂存空间
-
-    uint64 kstack;       // 内核栈的虚拟地址
-    context_t ctx;       // 内核态进程上下文
-} proc_t;
+    register long a7 __asm__("a7") = n;
+    register long a0 __asm__("a0") = a;
+    register long a1 __asm__("a1") = b;
+    register long a2 __asm__("a2") = c;
+    register long a3 __asm__("a3") = d;
+    register long a4 __asm__("a4") = e;
+    register long a5 __asm__("a5") = f;
+    __asm_syscall("r"(a7), "0"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5))
+}
 ```
 
-### 用户进程的地址空间
+内核可以通过访问`proc->tf->ax`直接拿到这些参数 (trapframe实在太好用了~)
 
-![pic](./pictures/01.png)
+- 对于值传递, `arg_uint32`和`arg_uint64`可以很好地完成任务
 
-图片显示了用户页表定义的用户进程地址空间 + 内核页表定义的内核程序地址空间
+- 对于地址传递, 必须考虑用户地址空间和内核地址空间不匹配的问题:
 
-为了让用户程序顺利陷入内核执行, 内核页表在初始化时需要多映射以下两个部分
+**用户传入的地址空间是基于用户页表的, 但是进入内核后使用的是内核页表**
 
-- **trampoline**: 定义在**trap/trampoline.S**, 是U-mode进入S-mode的代码逻辑
+解决这个问题需要手动查询用户页表, 找到虚拟地址对应的物理地址, 之后再做数据迁移
 
-- **kstack**: 宏`KSTACK(procid)` 定义了各个进程的内核栈地址空间, 目前只需映射proczero (procid = 0)
+请你完成`kernel/mem/uvm.c`的第一部分, 包括`uvm_copyin`、`uvm_copyout`、`uvm_copyin_str`三个部分
 
-除此之外, `main`在完成初始化工作后会调用`proc_make_first`来准备proczero的初始状态
+随后, 你需要补全`trap_user_handler`中的系统调用的处理逻辑:
 
-proczero的初始化流程如下:
+- 调用`syscall`进行分类跳转
 
-- 设置pid、申请trapframe的物理页、申请用户页表(顺便完成trampoline和trapframe的映射)
+- 补全三个具体的处理逻辑 `sys_copyin`、`sys_copyout`、`sys_copyinstr`
 
-- 申请ustack的物理页并完成映射、设置ustack_npage和heap_top
+- 注意: 这三个系统调用只服务于本次测试, 不是长期保存的系统调用
 
-- 为ELF文件(code + data)申请一个物理页、进行数据转移、完成映射
+## 测试1：用户态和内核态的数据迁移
 
-- 设置trapframe中的user_to_kern_epc (返回后被置为PC)、sp
+测试逻辑: 
 
-- 设置内核相关的kstack、ctx.ra、ctx.sp字段 (以便下次回到内核)
+- 用户读取内核中的数组 (1 2 3 4 5)
 
-- 通过swtch完成上下文切换
+- 用户将读到的数组传递给内核, 内核收到后打印出来
 
-**值得注意的问题: 用户程序的ELF文件从哪来?**
-
-Makefile中QEMU启动的部分, 我们传递给QEMU的参数是内核的可执行文件**kernel-qemu.elf**
-
-因此, 可以推断proczero对应的**initcode.elf**一定会以某种方式嵌入**kernel-qemu.elf**
-
-注意到**proc/proc.c**的头文件中有这样的代码
+- 用户将自己的字符串传递给内核, 内核收到后打印出来
 
 ```c
-#include "../../user/initcode.h"
-
-#define initcode target_user_initcode
-#define initcode_len target_user_initcode_len
-```
-
-它引用了**user/initcode.h**, 里面有一个长度为`initcode_len`的`initcode`数组
-
-这个数组其实就是ELF文件, 只是以数组的形式存储, 它的本体是 **user/initcode.c**
-
-修改**user/initcode.c**后执行 `make clean` + `make qemu` 就能将新的**initcode**同步到内核
-
-**initcode.h**的生成过程参见**Makefile**的有关逻辑, 这里不做详细介绍
-
-## 特权级内上下文切换 (context)
-
-让我们聚焦`proc_make_first`函数的最后一步: swtch(old_context, new_context)
-
-`swtch`函数定义在**proc/swtch.S**中, 它的作用是将若干寄存器的值存入内存区域A, 再将内存区域B的值写入寄存器
-
-获得寄存器的使用权意味着新的执行流开始工作, 失去寄存器的使用权意味着旧的执行流暂停执行
-
-在`proc_make_first`里, 新的执行流是proczero, 旧的执行流是OS内核本身(entry.S->start.c->main.c->proc_make_first)
-
-新执行流存储寄存器的内存区域是`proc->context`, 旧的执行流呢?
-
-注意到旧的执行流数量和CPU数量相等, 它们的栈被定义为`uint8 CPU_stack[4096 * NCPU]`
-
-因此, 我们只需要在`struct cpu`中增加一个`struct context`字段即可
-
-另外, 还需要增加`struct proc*`来标识当前CPU执行的是哪个用户进程, 通过`myproc()`暴露给外界
-
-## 特权级间上下文切换 (trapframe)
-
-书接上文, `proc_make_first`在执行`swtch`之前会将`proczero.context.ra`设置为`trap_user_return`
-
-这意味着`swtch`之后, proczero的执行流启动, 起始位置是`trap_user_return`
-
-让我们追随proczero的执行流, 将注意力从**proc.c**转移到**trap_user.c**和**trampoline.S**
-
-`trap_user_return`是进程从内核态进入用户态前的准备工作, 它负责:
-
-- 在`tf->user_to_kern_xxx`中保存一些内核态的运行信息
-
-- 将`user_vector`设为S-mode的trap处理入口 (控制流处于内核态则使用`kernel_vector`作为trap处理入口)
-
-- 将陷入内核时保存了`tf->sepc`写入sepc寄存器, 确保返回用户态后PC指针处于正确的未知
-
-- 将U-mode设为S-mode的上一个状态 (proczero第一次进入用户态时上一个状态不是U-mode, 手动设置一下)
-
-- 准备参数并调用**trampoline.S**中的`user_return`
-
-我们将**trampoline.S**中的`user_vector`和`user_return`作为一个整体来看待, 更好地理解这个过程
-
-- 在proczero第一次调用`user_return`时, 将`proczero->tf`保存到了`sscratch`寄存器
-
-- `user_vector`先将所有通用寄存器的值保存到`sscratch`寄存器指向的`trapframe`内存空间
-
-- `user_vector`随后恢复SP指针和hartid, 切换至内核页表, 调用`trap_user_handler`
-
-- `trap_user_handler`的工作在下一节做具体介绍, trap处理完成后进入返回阶段(`trap_user_return`)
-
-- `user_return`切换到用户页表, 恢复所有通用寄存器的值, 通过`sret`返回用户态
-
-相比`kernel_vector`和`trap_kernel_handler`组成的**A-B-A**结构
-
-`user_vector`、`trap_user_handler`、`trap_user_return`、`user_return`构成了更复杂的**A-B-C-D**结构
-
-值得注意的是: proczero 是直接从**C-D**开始的; 当用户态发生trap后, 才会走完**A-B-C-D**的完整过程
-
-## 用户态陷阱处理
-
-让我们先总结一下目前提到的三类执行流:
-
-- S-mode内核程序: entry.S->start.c->main.c->proc_make_first->执行流停滞
-
-- S-mode用户程序: proczero刚诞生时处于S-mode, 遇到trap后也处于S-mode
-
-- U-mode用户程序: proczero中initcode的执行处于U-mode
-
-进一步理解context和trapframe的区别:
-
-- context是S-mode内核程序切换到S-mode用户程序需要用到的临时内存空间
-
-- trapframe是U-mode用户程序切换到S-mode用户程序需要用到的临时空间
-
-- context不涉及特权级切换, 需要保存的寄存器数量和其他信息更少
-
-接下来我们讨论最后一个部分: `trap_user_handler`
-
-由于`trap_user_handler`和`trap_kernel_handler`都是在S-mode处理trap, 所以整体逻辑基本一样
-
-主要区别在于:
-
-- 进入`trap_user_handler`后会重写trap入口, 将它设为`trap_kernel_handler`
-
-- `trap_user_handler`要记录一下发生trap的PC值放到trapframe中, 确保正确返回用户态
-
-- `trap_user_handler`需要多处理一种特殊的异常——**系统调用(syscall)**
-
-这是我们第一次正式介绍**系统调用**(最重要的异常), 它在RISC-V中对应U-mode发出的ecall (8号异常)
-
-注意: 系统调用虽然被划分为异常, 但是返回时应该设置 PC=PC+4 (通过修改epc来实现), 行为其实更接近中断
-
-系统调用是用户程序获得系统服务的唯一方法, 也是一切用户库的最底层依赖
-
-**系统调用的本质是一组约定:**
-
-- 用户程序传入系统调用号(sys_num)来指定系统调用类型
-
-- 内核程序根据系统调用号, 进入不同的响应分支: 读取其他参数, 提供系统服务, 返回处理结果
-
-- 用户程序和内核程序通过trap机制进行通信, 实现跨特权级的"函数调用"
-
-## 测试
-
-**测试一: 系统调用**
-
-```c
+// in initcode.c
 #include "sys.h"
 
 int main()
 {
-    syscall(SYS_helloworld);
-    syscall(SYS_helloworld);
-    while (1)
-        ;
+    int L[5];
+    char* s = "hello, world"; 
+    syscall(SYS_copyout, L);
+    syscall(SYS_copyin, L, 5);
+    syscall(SYS_copyinstr, s);
+    while(1);
     return 0;
 }
 ```
 
-**initcode.c**里, 用户程序发出了两次系统调用, `trap_user_handler`需要正确地响应它们
+测试结果见`picture/test-1.png`
 
-方法很简单: 输出`proczero: hello world!\n`即可
+## 任务2：堆的手动管理与栈的自动管理
 
-这个测试用于验证第一个用户进程是否能和内核交互并获得内核提供的服务
+上次实验中, 栈空间被设置为4KB, 堆空间被设置为0KB, 对于非常简单的`initcode.c`是足够的
 
-**测试二: 用户态的时钟中断和串口中断**
+然而, 现实世界的应用程序需要可以动态增长的栈和堆, 本次实验我们做一个初步的实现
 
-LAB-3中我们验证了内核态时钟中断和串口中断的响应
+### 堆的管理是手动的
 
-现在请你测试一下, 在用户态, 中断响应是否能正常工作
+**堆-HEAP**为用户提供了一块连续的大范围内存空间, 它的生长方向的是低地址到高地址
+
+内核给用户程序提供了一个`sys_brk`系统调用, 允许用户改变堆顶的位置
+
+`sys_brk`的效果可以进一步分为:
+
+- 空间增加: old_heap_top < new_heap_top 
+
+- 空间减少: old_heap_top > new_heap_top
+
+- 空间不变: old_heap_top == new_heap_top
+
+- 查询当前栈顶: new_heap_top == 0
+
+涉及内存页面的申请释放、用户页表的修改、`proc->heap_top`的更新
+
+请你完成`sys_brk`、`uvm_heap_grow`、`uvm_heap_ungrow`几个函数
+
+### 栈的管理是自动的
+
+**栈-STACK**为用户的临时变量和函数执行提供了一块连续的内存空间, 它的生长方向是高地址到低地址
+
+用户程序无需显式地管理栈空间, 由内核根据用户需要进行自动管理 (自动的内存申请和映射)
+
+内核不会在进程初始化时直接分配一个很大的栈空间 (默认分配4KB), 而是根据程序运行的需要逐步分配足够大的空间
+
+当用户读或写一块未分配的地址空间时, 会触发**13号异常(Load Page Fault)** / **15号异常(Store/AMO Page Fault)**
+
+我们在`trap_user_handler`里识别这两种异常, 然后调用`uvm_ustack_grow`来处理缺页异常
+
+`uvm_ustack_grow`首先判断发生page fault的地址 (放在stval寄存器) 是否是合理的栈扩展地址
+
+确认合法性后: 申请物理页面、修改用户页表、更新`proc->ustack_npage`
+
+需要提醒的是: 一次可以扩展多个页面, 扩展后不会发生收缩 (和堆的管理不同)
+
+### 边界检查
+
+需要提醒的是: 我们在栈和堆的中间区域里, 划分了一段地址空间作为离散内存空间的区域 (mmap_region)
+
+这块区域的起点地址被定义为`MMAP_BEGIN`, 终点被定义为`MMAP_END` (in `kernl/mem/type.h`)
+
+因此, 栈的生长不应该越过`MMAP_END`, 堆的生长不应该越过`MMAP_BEGIN`
+
+mmap_region的详细介绍放在任务3和和任务4, 这里只需要注意边界检查即可
+
+## 测试2：堆的手动管理与栈的自动管理
+
+**堆的管理**
+
+```c
+// in initcode.c
+#include "sys.h"
+
+#define PGSIZE 4096
+
+int main()
+{
+    long long heap_top = 0;
+    
+    heap_top = syscall(SYS_brk, 0);
+    heap_top = syscall(SYS_brk, heap_top + PGSIZE * 9);
+    heap_top = syscall(SYS_brk, heap_top);
+    heap_top = syscall(SYS_brk, heap_top - PGSIZE * 5);
+
+    while(1);
+    return 0;
+}
+```
+
+你需要在`sys_brk`中增加一些调试性输出
+
+测试结果见`picture/test-2(1)(2).png`
+
+**栈的管理**
+
+函数内定义非static的长数组就能让栈的大小超过4KB
+
+你也可以通过深度函数递归来实现类似的效果 (比如汉诺塔问题)
+
+```c
+// in initcode.c
+#include "sys.h"
+
+#define PGSIZE 4096
+
+int main()
+{
+    char tmp[PGSIZE * 4];
+
+    tmp[PGSIZE * 3] = 'h';
+    tmp[PGSIZE * 3 + 1] = 'e';
+    tmp[PGSIZE * 3 + 2] = 'l';
+    tmp[PGSIZE * 3 + 3] = 'l';
+    tmp[PGSIZE * 3 + 4] = 'o';
+    tmp[PGSIZE * 3 + 5] = '\0';
+
+    syscall(SYS_copyinstr, tmp + PGSIZE * 3);
+
+    tmp[0] = 'w';
+    tmp[1] = 'o';
+    tmp[2] = 'r';
+    tmp[3] = 'l';
+    tmp[4] = 'd';
+    tmp[5] = '\0';
+
+    syscall(SYS_copyinstr, tmp);
+
+    while (1);
+    return 0;
+}
+```
+
+你需要在`trap_user_handler`中增加一些调试性输出
+
+测试结果见`picture/test-3.png`
+
+## 任务3: mmap_region_node 仓库管理
+
+应用程序有了堆和栈就足够了吗? 应用程序有时需要临时申请一块内存空间, 过一会就释放掉
+
+- 用栈来申请的话无法手动释放 (释放函数里数组占用的空间?)
+
+- 用堆来申请的话可能面临碎片化风险 (堆更适合管理大片逻辑连续的内存空间)
+
+因此, 我们需要设计一种可以动态申请释放的离散内存资源管理方法
+
+直观的想法就是链表结构: 将多个内存资源节点通过链表链接在一起, 在进程结构体里存储表头!
+
+说明: 在真实的操作系统里, 堆、栈、内存映射区的细节和定位与我们这里说的有所区别
+
+结构体 `mmap_region_t` 用于描述一块连续地址空间, 它起始于`begin`, 包括`npages`个页面
+
+进程会记录地址空间中的第一个`mmap_region_t`, 各个资源节点通过`next`指针串联 (构成单链表)
+
+**特别提醒: mma_region_t 描述的是已分配出去的空间, 和2024版本是反过来的!**
+
+```c
+/* mmap_region 描述了一个 mmap区域 */
+typedef struct mmap_region
+{
+    uint64 begin;             // 起始地址
+    uint32 npages;            // 管理的页面数量
+    struct mmap_region *next; // 链表指针
+} mmap_region_t;
+```
+
+理解这部分后我们继续考虑另一个问题: `mmap_region_t`结构体本身也是一种资源
+
+我们规定OS内核可以提供`N_MMAP`个这样的结构体, 各个进程需要有序获取该资源
+
+为了保证各个进程可以高效和有序地共享这种资源, 我们在`kernel/mem/mmap.c`里维护了一个资源仓库
+
+```c
+/* mmap_region_node 是 mmap_region 在仓库里的包装 */
+typedef struct mmap_region_node
+{
+    mmap_region_t mmap;
+    struct mmap_region_node *next;
+} mmap_region_node_t;
+
+
+// mmap_region_node_t 仓库(单向链表) + 链表头节点(不可分配) + 保护仓库的自旋锁
+static mmap_region_node_t node_list[N_MMAP];
+static mmap_region_node_t list_head;
+static spinlock_t list_lk;
+```
+
+具体来说:
+
+- 首先将 `mmap_region_t` 包装为 `mmap_region_node_t`, 以维护资源仓库的单链表结构
+
+- 然后通过全局的自旋锁 `list_lk` 确保任何时候只有一个进程在获取资源或释放资源
+
+- 提供`mmap_init`、`mmap_region_alloc`、`mmap_region_free`作为资源仓库的对外接口
+
+## 测试3: mmap_region_node 仓库管理
+
+我们先来测试一下, 作为资源仓库, 它能不能在多核竞争的条件下保证资源申请和释放的有序性
+
+```c
+// in main.c
+volatile static int started = 0;
+volatile static bool over_1 = false, over_2 = false;
+volatile static bool over_3 = false, over_4 = false;
+
+void* mmap_list[N_MMAP];
+
+int main()
+{
+    int cpuid = r_tp();
+
+    if(cpuid == 0) {
+        
+        print_init();
+        printf("cpu %d is booting!\n", cpuid);
+        pmem_init();
+        kvm_init();
+        kvm_inithart();
+        trap_kernel_init();
+        trap_kernel_inithart();
+        
+        // 初始化 + 初始状态显示
+        mmap_init();
+        mmap_show_nodelist();
+        printf("\n");
+
+        __sync_synchronize();
+        started = 1;
+
+        // 申请
+        for(int i = 0; i < N_MMAP / 2; i++)
+            mmap_list[i] = mmap_region_alloc();
+        over_1 = true;
+
+        // 屏障
+        while(over_1 == false ||  over_2 == false);
+
+        // 释放
+        for(int i = 0; i < N_MMAP / 2; i++)
+            mmap_region_free(mmap_list[i]);
+        over_3 = true;
+
+        // 屏障
+        while (over_3 == false || over_4 == false);
+
+        // 查看结束时的状态
+        mmap_show_nodelist();        
+
+    } else {
+
+        while(started == 0);
+        __sync_synchronize();
+        printf("cpu %d is booting!\n", cpuid);
+        kvm_inithart();
+        trap_kernel_inithart();
+
+        // 申请
+        for(int i = N_MMAP / 2; i < N_MMAP; i++)
+            mmap_list[i] = mmap_region_alloc();
+        over_2 = true;
+
+        // 屏障
+        while(over_1 == false || over_2 == false);
+
+        // 释放
+        for(int i = N_MMAP / 2; i < N_MMAP; i++)
+            mmap_region_free(mmap_list[i]);
+        over_4 = true;
+    }
+
+    while (1);
+}
+```
+
+测试结果见`picture/test-4(1)(2).png`
+
+- 第一部分的输出应该是 `node X index = X` (X从0增加到255)
+
+- 第二部分输出应该是两股输出交替 (node从0增加到255, 一股index从255减到128, 另一股index从127减到0)
+
+## 任务4: mmap 与 munmap
+
+资源仓库的建立使得 `mmap_region_t` 结构体的申请和释放更加方便和安全, 服务于mmap和munamp操作
+
+我们以mmap为例, 从系统调用出发, 梳理它的逻辑过程:
+
+- 用户程序发出 `sys_mmap(uint64 begin, uint32 len)` 申请一块内存空间
+
+- 调用`uvm_mmap(begin, len / PGSIZE, PTE_R | PTE_W)`进行具体处理
+
+- `uvm_mmap()`首先创建一个新的 mmap_region_t 用于描述这块新的地址空间
+
+- 随后将将这块 new_mmap_region 插入进程 mmap 链表的合适位置 (保持整体有序)
+
+- 新插入的节点可能和前面的节点相邻, 可能和后面的节点相邻, 也可能同时相邻
+
+- 考虑到仓库里资源受限的问题, 我们应该将相邻的节点进行尽可能的合并 (逻辑较为复杂, 建议你画图分析)
+
+- 我们提供了辅助函数`mmap_merge()`用于帮助你完成这些合并, 你可以研究一下怎么用
+
+- 合并完成后, 进行物理页申请和页表修改的步骤 (这里比较简单)
+
+**注意: 当用户传入的begin=0时, 从头到尾扫描, 找到第一个足够大的空间即可**
+
+**另外: 记得为proc结构体增加mmap字段, 并在proc_make_first函数中增加对应的初始化逻辑**
+
+munmap的整体流程于mmap相近, 你应该具备举一反三的能力, 这里不做详细介绍
+
+## 测试4: mmap 与 munmap
+
+我们给出了测试用例用于检测uvm_mmap()和uvm_munmap()中可能的遗漏和错误
+
+请你理解它在测试哪些情况, 以及预期的输出是什么样的
+
+当然, 你应该补充更多测试用例, 以确保实现的完备性
+
+```c
+// in initcode.c
+#include "sys.h"
+
+// 与内核保持一致
+#define VA_MAX       (1ul << 38)
+#define PGSIZE       4096
+#define MMAP_END     (VA_MAX - (16 * 256 + 2) * PGSIZE)
+#define MMAP_BEGIN   (MMAP_END - 64 * 256 * PGSIZE)
+
+int main()
+{
+    // 建议画图理解这些地址和长度的含义
+
+    // sys_mmap 测试 
+    syscall(SYS_mmap, MMAP_BEGIN + 4 * PGSIZE, 3 * PGSIZE);
+    syscall(SYS_mmap, MMAP_BEGIN + 10 * PGSIZE, 2 * PGSIZE);
+    syscall(SYS_mmap, MMAP_BEGIN + 2 * PGSIZE,  2 * PGSIZE);
+    syscall(SYS_mmap, MMAP_BEGIN + 12 * PGSIZE, 1 * PGSIZE);
+    syscall(SYS_mmap, MMAP_BEGIN + 7 * PGSIZE, 3 * PGSIZE);
+    syscall(SYS_mmap, MMAP_BEGIN, 2 * PGSIZE);
+    syscall(SYS_mmap, 0, 10 * PGSIZE);
+
+    // sys_munmap 测试
+    syscall(SYS_munmap, MMAP_BEGIN + 10 * PGSIZE, 5 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN, 10 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN + 17 * PGSIZE, 2 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN + 15 * PGSIZE, 2 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN + 19 * PGSIZE, 2 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN + 22 * PGSIZE, 1 * PGSIZE);
+    syscall(SYS_munmap, MMAP_BEGIN + 21 * PGSIZE, 1 * PGSIZE);
+
+    while(1);
+    return 0;
+}
+```
+
+请你在`sys_mmap()`和`sys_munmap()`中增加提示性输出
+
+```c
+    proc_t *p = myproc();
+    uvm_show_mmaplist(p->mmap);
+    vm_print(p->pgtbl);
+    printf("\n");
+```
+
+测试结果见`picture/test-5(1)(2)(3)(4)(5)(6)(7)(8).png`
+
+## 任务5: 页表的复制与销毁
+
+虽然目前我们只有一个进程且永不退出，但是需要为下一个实验做一些准备
+
+你需要完成页表复制和销毁的函数 uvm_destroy_pgtbl() 和 uvm_copy_pgtbl()
+
+需要提醒的是:
+
+- 第一个函数考虑如何使用递归完成
+
+- 第二个函数深入理解用户地址空间各个区域的特点
+
+## 测试5: 页表的复制与销毁
+
+请你参考前4个测试点的设计, 自行决定如何测试页表的复制和销毁
 
 **尾声**
 
-相信你可以感觉到, 用户进程的引入明显提高了OS内核的复杂度
+本次实验大概分成以下三个逻辑阶段:
 
-进程模块和内存模块、陷阱模块有着密切的联系, 牵一发而动全身
+- 首先关注如何实现用户态和内核态的数据传递 (以trapframe为媒介), 并建立规范的系统调用流程
 
-因此, 我们做了细致的拆分, 让用户进程能力逐步变强, 数量由一到多
+- 随后讨论了用户态内存空间的管理: 堆、栈、mmap_region
 
-- 在LAB-5: 我们将赋予proczero更强大的内存管理能力, 并建立真正的系统调用体系
+- 最后讨论了用户页表整体的复制和销毁, 为下一个实验做准备
 
-- 在LAB-6：我们将引入proczero的子子孙孙, 实现完整的进程生命周期管理和多进程调度
+经过两次实验的打磨, proczero现在已经比较强大和完善了, 但是似乎有些孤单?
+
+**我们将在下一个实验引入它的子子孙孙, 从单进程走向多进程！**

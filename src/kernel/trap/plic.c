@@ -4,24 +4,29 @@
 void plic_init()
 {
     // 设置UART中断优先级
-    *(uint32 *)(PLIC_PRIORITY(UART_IRQ)) = 1;
+    *(volatile uint32 *)(PLIC_PRIORITY(UART_IRQ)) = 1;
 }
 
 // PLIC核心初始化
 void plic_inithart()
 {
     int hartid = mycpuid();
-    // 使能中断开关
-    *(uint32 *)PLIC_SENABLE(hartid) = (1 << UART_IRQ);
+    volatile uint32 *enable = (volatile uint32 *)PLIC_SENABLE(hartid);
+#ifdef VISIONFIVE2
+    // 清零已有的中断使能
+    for (int word = 0; word < 5; word++)
+        enable[word] = 0;
+#endif
+    enable[UART_IRQ / 32] = 1u << (UART_IRQ % 32);
     // 设置响应阈值
-    *(uint32 *)PLIC_SPRIORITY(hartid) = 0;
+    *(volatile uint32 *)PLIC_SPRIORITY(hartid) = 0;
 }
 
 // 获取中断号
 int plic_claim(void)
 {
     int hartid = mycpuid();
-    int irq = *(uint32 *)PLIC_SCLAIM(hartid);
+    int irq = *(volatile uint32 *)PLIC_SCLAIM(hartid);
     return irq;
 }
 
@@ -29,5 +34,5 @@ int plic_claim(void)
 void plic_complete(int irq)
 {
     int hartid = mycpuid();
-    *(uint32 *)PLIC_SCLAIM(hartid) = irq;
+    *(volatile uint32 *)PLIC_SCLAIM(hartid) = irq;
 }

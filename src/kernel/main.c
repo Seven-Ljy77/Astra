@@ -1,66 +1,70 @@
 #include "arch/mod.h"
 #include "lib/mod.h"
 #include "mem/mod.h"
+#include "trap/mod.h"
 #include "proc/mod.h"
+//_entry_secondary是HSM启动其他hart的入口
+extern void _entry_secondary(void);
 
-static volatile int started = 0;
+static volatile int initialized = 0;
 
-static volatile int main_hart = -1;
-
-extern void _entry(void);
-
-int main()
+void main(void)
 {
-    int cpuid = r_tp();
+    uint64 hartid = r_tp();
 
-    // 检查旧值如果符合 -1 则交换为 cpuid (原子操作)
-    // 返回是否交换成功
-    bool if_main_hart = __sync_bool_compare_and_swap(&main_hart, -1, cpuid);
-
-    if (if_main_hart) {
+    if (hartid == boot_hartid)
+    {
         print_init();
+        printf("cpu %d is booting with OpenSBI!\n", (int)hartid);
         pmem_init();
         kvm_init();
-        kvm_inithart();
-        trap_kernel_init();
-        trap_kernel_inithart();
-        timer_init();
 
-        printf("\n");
-        printf("kernel is booting !\n");
-        printf("\n");
+        // trap中各个CPU共享的初始化: PLIC和系统时钟
+        // 必须放在其他hart启动之前, 否则它们可能在初始化完成前就走进中断
+        trap_kernel_init();
 
         __sync_synchronize();
-        started = 1;
+        initialized = 1;
 
-        printf("CPU %d is booting !\n" , cpuid);
-
-        for (int i=0 ; i<(int)NCPU ; i++) {
-            if (i == cpuid)
+        for (uint64 id = FIRST_HART; id < NCPU; id++)
+        {
+            if (id == boot_hartid)
                 continue;
-
-            sbi_ret_t result = sbi_hart_start((uint64)i , (uint64)_entry , (uint64)0);
-            if (result.error != (int64)SBI_SUCCESS) {
-                printf("Hart %d Starting Failed , result.error = %d" , i , (int)(result.error));
-                return 0;
+            sbi_ret_t ret = sbi_hart_start(id, (uint64)_entry_secondary, 0);
+            if (ret.error != SBI_SUCCESS)
+            {
+                printf("failed to start cpu %d: error %d\n",
+                       (int)id, (int)ret.error);
+                panic("sbi_hart_start");
             }
         }
     }
-    else {
-        while (started == 0) {}
+    else
+    {
+        while (!initialized)
+            ;
         __sync_synchronize();
-        
-        kvm_inithart();
-        trap_kernel_inithart();
-        timer_init();
-        
-        printf("CPU %d is booting !\n" , cpuid);
+        printf("cpu %d is booting with OpenSBI!\n", (int)hartid);
     }
 
-    if (cpuid == 0)
+    // 以下初始化是每个CPU各自独有的
+
+    // 切换到内核页表 (必须等启动核把内核页表建好)
+    kvm_inithart();
+
+    // PLIC开关, 中断入口stvec, 中断使能位
+    trap_kernel_inithart();
+    if (hartid == boot_hartid)
+        uart_enable_rx_interrupt();
+
+    // 设置本CPU的第一次时钟事件, 并打开S-mode时钟中断
+    timer_init();
+
+    // 保留 Lab4 首进程入口，由实际启动核执行。
+    if (hartid == boot_hartid)
         proc_make_first();
 
-    while (1) {}
-
-    return 0;
+    // TODO(Lab5): 使用 mmap 前完成节点池初始化。
+    while (1)
+        asm volatile("wfi");
 }

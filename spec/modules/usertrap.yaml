@@ -11,6 +11,7 @@ rules:
 - 切换 satp 前后均在同一 TRAMPOLINE 虚拟地址执行并刷新 TLB；用户寄存器保存和恢复不得混用页表。
 - 未知系统调用返回 -1；用户执行错误停止故障进程，不触发内核 panic；内核状态矛盾才 panic。
 - scause 5的S-mode时钟中断调用timer_interrupt_handler，以SBI TIME重设下一次事件；scause 9的外部中断调用external_interrupt_handler。
+# 保留既有往返契约；Lab5 新 syscall 和缺页功能尚待实现。
 functions:
   user_vector:
     pre:
@@ -32,7 +33,7 @@ functions:
     - 将 stvec 切换为 kernel_vector，供内核执行期间的 trap 使用。
     - 将 sepc 保存到当前进程 tf.user_to_kern_epc，读取 scause 并区分中断与异常。
     - 时钟中断调用 timer_interrupt_handler，外部中断调用 external_interrupt_handler；不推进保存的用户 PC。
-    - U-mode ecall 从 tf.a7 读取系统调用号；SYS_helloworld 输出 proczero hello world 消息并设置 tf.a0 为 0，未知调用设置 tf.a0 为 uint64 表示的 -1。
+    - U-mode ecall 从 tf.a7 读取系统调用号；Lab4 的 SYS_helloworld 分支仅作为禁用的学习记录保留；当前暂返回 -1。Lab5 待接入 syscall 分派，具体服务遵循 syscall.yaml。
     - 对 ecall 将保存的用户 PC 增加 4，跳过 ecall 指令。
     - 可恢复的处理完成后调用 trap_user_return；用户执行错误输出诊断、清空当前 cpu.proc，并在开启中断的内核 wfi 循环中停止故障用户执行。
     post:
